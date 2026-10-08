@@ -1,0 +1,3178 @@
+{
+    "meta": {
+        "name": "shooting_range",
+        "version_timestamp": "2026-10-05 00:52:10.487298 UTC"
+    },
+    "about": {
+        "author": "Pythagoras",
+        "welcome_message": "  h"
+    },
+    "settings": {
+        "default_server_mode": "quick_test",
+        "ambient_light_color": [5, 35, 52, 255],
+        "sun_shadows": {
+            "strength": 0.6019999980926514
+        }
+    },
+    "playtesting": {
+        "mode": "quick_test"
+    },
+    "game_modes": {
+        "quick_test": {
+            "equipment": {
+                "metropolis": {
+                    "firearm": null,
+                    "melee": null,
+                    "all_spells": true,
+                    "electric_armor": true
+                },
+                "resistance": {
+                    "firearm": null,
+                    "melee": null,
+                    "backpack": false,
+                    "electric_armor": true
+                }
+            }
+        }
+    },
+    "external_resources": [
+        {
+            "path": "captions/glass.png",
+            "file_hash": "ad952aaf897e1a14d2676b0b28332c3bd470fb8d27bb5077d15faa911625cf79",
+            "id": "@captions/glass.png",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "color": [0, 180, 255, 255],
+            "neon_color": [0, 180, 255, 255],
+            "size": [293, 68]
+        },
+        {
+            "path": "captions/metal.png",
+            "file_hash": "d918c3bc85e974a066078d23c4409b4dce2b09b75673e844b8feea2f59ebfb65",
+            "id": "@captions/metal.png",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "size": [291, 66]
+        },
+        {
+            "path": "captions/vent.png",
+            "file_hash": "34d7519a5c3ba91d9db2c315b69783ee4dc32a02c4ea6222edf52d81f217a9fb",
+            "id": "@captions/vent.png",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "color": [0, 255, 126, 255],
+            "neon_color": [0, 255, 126, 255],
+            "size": [236, 66]
+        },
+        {
+            "path": "captions/wood.png",
+            "file_hash": "8c633cd48dc37d6088c5c6cd79982328ab27eaab81b54186930345153404d1f3",
+            "id": "@captions/wood.png",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "color": [255, 127, 0, 255],
+            "neon_color": [255, 127, 0, 255],
+            "size": [235, 68]
+        },
+        {
+            "path": "gfx/metropolis_head_icon.png",
+            "file_hash": "a36ffc3016f743c048591357f5750c0f7a49a1bdc6eae0d5378508cfdb9ed075",
+            "id": "@metropolis_head_icon",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "size": [33, 26],
+            "stretch_when_resized": true
+        },
+        {
+            "path": "gfx/pad_outline.png",
+            "file_hash": "0271bdbf4e60e99bb605e7d5f8e72d92771009c38c33a9b65a127ba42aa74d71",
+            "id": "@pad_outline",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "size": [256, 256]
+        },
+        {
+            "path": "gfx/resistance_head_icon.png",
+            "file_hash": "effb9f216350c1ccbebbacf7ed3237bf8d53707fdbe7cbb46b2eea81b3397ba7",
+            "id": "@resistance_head_icon",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "size": [35, 30],
+            "stretch_when_resized": true
+        },
+        {
+            "path": "gfx/water_room_floor.png",
+            "file_hash": "67c17418dc25e164ebf0265d50490fd9388da8ff0e37ae4d7838b2a9d8a4b7ed",
+            "id": "@water_room_floor",
+            "neon_map": {
+                "standard_deviation": 8.0,
+                "amplification": 10.0,
+                "light_colors": [[95, 205, 228, 255, 1.0]
+                ]
+            },
+            "neon_color": [255, 255, 255, 0],
+            "size": [64, 64],
+            "as_nonphysical": {
+                "custom_footstep": {
+                    "sound": {
+                        "id": "footstep_floor"
+                    }
+                }
+            }
+        },
+        {
+            "path": "gfx/water_room_floor_2.png",
+            "file_hash": "9d7d4e14d04d6bda52e7c7b59ed0f177caadf5e3a486fde33f1fce82883e0826",
+            "id": "@water_room_floor_2",
+            "neon_color": [255, 255, 255, 106],
+            "size": [64, 64],
+            "OFF_rotate_continuously_degrees_per_sec": 1.0,
+            "as_nonphysical": {
+                "custom_footstep": {
+                    "sound": {
+                        "gain": 0.6000000238418579,
+                        "pitch": 0.8999999761581421
+                    }
+                }
+            }
+        },
+        {
+            "path": "gfx/zoom.png",
+            "file_hash": "10f2395fd613ae719a85ad7e04794a3afa2f5b985f632ecc1e2dd131c648d3da",
+            "id": "@zoom",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "size": [32, 32],
+            "stretch_when_resized": true
+        },
+        {
+            "path": "materials/glass.png",
+            "file_hash": "ff96148205abf557486063d54c77ea8d8ee5613551eb5253bf8e755929e02a30",
+            "id": "@materials/glass.png",
+            "domain": "PHYSICAL",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0], [219, 213, 207, 255, 1.0], [255, 245, 237, 255, 1.0]
+                ]
+            },
+            "color": [0, 180, 255, 255],
+            "neon_color": [255, 255, 255, 81],
+            "size": [1, 1],
+            "stretch_when_resized": true,
+            "as_physical": {
+                "is_static": true,
+                "is_see_through": true,
+                "material": "glass"
+            }
+        },
+        {
+            "path": "materials/metal.png",
+            "file_hash": "ff96148205abf557486063d54c77ea8d8ee5613551eb5253bf8e755929e02a30",
+            "id": "@materials/metal.png",
+            "domain": "PHYSICAL",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "neon_color": [255, 255, 255, 72],
+            "size": [64, 64],
+            "stretch_when_resized": true,
+            "as_physical": {
+                "is_static": true,
+                "is_see_through": true
+            }
+        },
+        {
+            "path": "materials/vent.png",
+            "file_hash": "ff96148205abf557486063d54c77ea8d8ee5613551eb5253bf8e755929e02a30",
+            "id": "@materials/vent.png",
+            "domain": "PHYSICAL",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0]
+                ]
+            },
+            "color": [0, 255, 126, 255],
+            "neon_color": [255, 255, 255, 72],
+            "size": [64, 64],
+            "stretch_when_resized": true,
+            "as_physical": {
+                "is_static": true,
+                "material": "vent"
+            }
+        },
+        {
+            "path": "materials/wood.png",
+            "file_hash": "ff96148205abf557486063d54c77ea8d8ee5613551eb5253bf8e755929e02a30",
+            "id": "@materials/wood.png",
+            "domain": "PHYSICAL",
+            "neon_map": {
+                "light_colors": [[255, 255, 255, 255, 1.0], [218, 218, 214, 255, 1.0], [224, 224, 220, 255, 1.0], [238, 236, 230, 255, 1.0], [232, 232, 226, 255, 1.0], [214, 216, 212, 255, 1.0]
+                ]
+            },
+            "color": [255, 171, 0, 255],
+            "neon_color": [255, 171, 0, 123],
+            "size": [64, 64],
+            "stretch_when_resized": true,
+            "as_physical": {
+                "is_static": true,
+                "is_see_through": true,
+                "material": "wood"
+            }
+        }
+    ],
+    "layers": [
+        {
+            "id": "Layer 31"
+        },
+        {
+            "id": "faction_pads",
+            "nodes": [
+                "faction_resistance_outline",
+                "faction_metropolis_outline",
+                "faction_resistance",
+                "faction_metropolis"
+            ]
+        },
+        {
+            "id": "Layer 30",
+            "is_open_in_editor": false,
+            "nodes": [
+                "bombsite"
+            ]
+        },
+        {
+            "id": "Layer 29",
+            "is_open_in_editor": false,
+            "nodes": [
+                "bomb (1)",
+                "bomb"
+            ]
+        },
+        {
+            "id": "Layer 28",
+            "is_open_in_editor": false,
+            "nodes": [
+                "minimap_marker (1)",
+                "minimap_marker",
+                "zoom_2x",
+                "zoom_2x_outline",
+                "zoom_4x",
+                "zoom_1x",
+                "zoom_0.8x",
+                "zoom_0.75x",
+                "zoom_0.7x",
+                "zoom_0.6x",
+                "zoom_0.5x",
+                "zoom_4x_outline",
+                "zoom_1x_outline",
+                "zoom_0.8x_outline",
+                "zoom_0.75x_outline",
+                "zoom_0.7x_outline",
+                "zoom_0.6x_outline",
+                "zoom_0.5x_outline"
+            ]
+        },
+        {
+            "id": "Layer 27",
+            "nodes": [
+                "dev_floor_256 (5)"
+            ]
+        },
+        {
+            "id": "Layer 26",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 25",
+            "is_open_in_editor": false,
+            "nodes": [
+                "nav_island"
+            ]
+        },
+        {
+            "id": "Layer 24",
+            "is_open_in_editor": false,
+            "nodes": [
+                "green_coin (5)",
+                "green_coin (4)",
+                "green_coin (3)",
+                "crystal_coin (8)",
+                "crystal_coin (7)",
+                "crystal_coin (6)",
+                "crystal_coin (5)",
+                "crystal_coin (4)",
+                "crystal_coin (3)",
+                "platinum_coin",
+                "platinum_coin (1)",
+                "platinum_coin (2)",
+                "gold_coin",
+                "gold_coin (1)",
+                "gold_coin (2)"
+            ]
+        },
+        {
+            "id": "Layer 23",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 22",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 21",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 20",
+            "nodes": [
+                "point_light (8)",
+                "point_light (7)",
+                "point_light (3)"
+            ]
+        },
+        {
+            "id": "Layer 19",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 33",
+            "nodes": [
+                "point_light (9)-right",
+                "aquarium_bottom_lamp_light-down (5)-right",
+                "aquarium_bottom_lamp_body-down (5)-right",
+                "aquarium_bottom_lamp_light (5)-right",
+                "aquarium_bottom_lamp_body (4)-right",
+                "aquarium_bottom_lamp_light-down (4)-right",
+                "aquarium_bottom_lamp_body-down (4)-down-right",
+                "aquarium_bottom_lamp_body-down (4)-right",
+                "aquarium_bottom_lamp_light (4)-right"
+            ]
+        },
+        {
+            "id": "Layer 32",
+            "nodes": [
+                "point_light (9)",
+                "aquarium_bottom_lamp_light-down (5)",
+                "aquarium_bottom_lamp_body-down (5)",
+                "aquarium_bottom_lamp_light (5)",
+                "aquarium_bottom_lamp_body (4)",
+                "aquarium_bottom_lamp_light-down (4)",
+                "aquarium_bottom_lamp_body-down (4)-down",
+                "aquarium_bottom_lamp_body-down (4)",
+                "aquarium_bottom_lamp_light (4)"
+            ]
+        },
+        {
+            "id": "Layer 18",
+            "nodes": [
+                "dev_wall_256 (3)",
+                "dev_wall_256 (2)",
+                "dev_wall_256 (4)",
+                "aquarium_bottom_lamp_light-down (3)",
+                "aquarium_bottom_lamp_body-down (3)",
+                "aquarium_bottom_lamp_light (3)",
+                "aquarium_bottom_lamp_body (3)",
+                "aquarium_bottom_lamp_light-down (2)",
+                "aquarium_bottom_lamp_body-down (2)",
+                "aquarium_bottom_lamp_light (2)",
+                "aquarium_bottom_lamp_body (2)",
+                "aquarium_bottom_lamp_light-down (1)",
+                "aquarium_bottom_lamp_body-down (1)",
+                "aquarium_bottom_lamp_light (1)",
+                "aquarium_bottom_lamp_body (1)",
+                "aquarium_bottom_lamp_light-down",
+                "aquarium_bottom_lamp_body-down",
+                "aquarium_bottom_lamp_light",
+                "aquarium_bottom_lamp_body",
+                "point_light (2)",
+                "point_light",
+                "dev_floor_256 (1)",
+                "dev_wall_256 (5)",
+                "dev_wall_256 (1)",
+                "dev_wall_256"
+            ]
+        },
+        {
+            "id": "Layer 17",
+            "is_open_in_editor": false,
+            "nodes": [
+                "sword-right (1)",
+                "sword-right",
+                "sword (1)",
+                "sword"
+            ]
+        },
+        {
+            "id": "Layer 16",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 15",
+            "is_open_in_editor": false,
+            "nodes": [
+                "bilmik (1)",
+                "bilmik"
+            ]
+        },
+        {
+            "id": "Layer 14",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 13",
+            "is_open_in_editor": false,
+            "nodes": [
+                "vindicator (2)",
+                "vindicator"
+            ]
+        },
+        {
+            "id": "Layer 10",
+            "is_open_in_editor": false,
+            "nodes": [
+                "szczur (2)",
+                "szczur"
+            ]
+        },
+        {
+            "id": "Layer 6",
+            "is_open_in_editor": false,
+            "nodes": [
+                "aquarium_ambience_right",
+                "aquarium_ambience_left"
+            ]
+        },
+        {
+            "id": "Layer 5",
+            "nodes": [
+                "crate (1)",
+                "crate (2)",
+                "crate"
+            ]
+        },
+        {
+            "id": "Layer 4",
+            "is_open_in_editor": false,
+            "nodes": [
+                "portal (7)",
+                "portal (6)",
+                "portal (8)",
+                "portal (11)",
+                "portal (5)",
+                "portal (4)"
+            ]
+        },
+        {
+            "id": "Layer 3",
+            "is_open_in_editor": false,
+            "nodes": [
+                "aquarium"
+            ]
+        },
+        {
+            "id": "knifes",
+            "is_open_in_editor": false,
+            "nodes": [
+                "assault_rattle-right (1)",
+                "fury_thrower-right (1)",
+                "poseidon-right (1)",
+                "yellow_dagger-right (1)",
+                "cyan_scythe-right (1)",
+                "mini_knife-right (1)",
+                "assault_rattle (1)",
+                "fury_thrower (1)",
+                "poseidon (1)",
+                "yellow_dagger (1)",
+                "cyan_scythe (1)",
+                "mini_knife (1)",
+                "electric_rapier-right (1)",
+                "electric_rapier (1)",
+                "electric_rapier-right",
+                "electric_rapier",
+                "assault_rattle-right",
+                "fury_thrower-right",
+                "poseidon-right",
+                "yellow_dagger-right",
+                "cyan_scythe-right",
+                "mini_knife-right",
+                "assault_rattle",
+                "fury_thrower",
+                "poseidon",
+                "yellow_dagger",
+                "cyan_scythe",
+                "mini_knife"
+            ]
+        },
+        {
+            "id": "portals",
+            "is_open_in_editor": false,
+            "nodes": [
+                "portal (1)",
+                "portal (3)",
+                "portal (2)",
+                "portal"
+            ]
+        },
+        {
+            "id": "Layer 2",
+            "is_open_in_editor": false,
+            "nodes": [
+                "Water room floor 2 (4)",
+                "range_spawn"
+            ]
+        },
+        {
+            "id": "Layer 12",
+            "is_open_in_editor": false,
+            "nodes": [
+                "force_grenade (1)-down-down (1)",
+                "flashbang (1)-down-down (1)",
+                "ped_grenade (1)-down-down (1)",
+                "interference_grenade (1)-down-down (1)",
+                "force_grenade-down-down (1)",
+                "flashbang-down-down (1)",
+                "ped_grenade-down-down (1)",
+                "interference_grenade-down-down (1)",
+                "force_grenade (1)-down (3)",
+                "flashbang (1)-down (3)",
+                "ped_grenade (1)-down (3)",
+                "interference_grenade (1)-down (3)",
+                "force_grenade-down (3)",
+                "flashbang-down (3)",
+                "ped_grenade-down (3)",
+                "interference_grenade-down (3)",
+                "force_grenade (1)-down (2)",
+                "flashbang (1)-down (2)",
+                "ped_grenade (1)-down (2)",
+                "interference_grenade (1)-down (2)",
+                "force_grenade-down (2)",
+                "flashbang-down (2)",
+                "ped_grenade-down (2)",
+                "interference_grenade-down (2)",
+                "force_grenade (3)",
+                "flashbang (3)",
+                "ped_grenade (3)",
+                "interference_grenade (3)",
+                "force_grenade (2)",
+                "flashbang (2)",
+                "ped_grenade (2)",
+                "interference_grenade (2)",
+                "force_grenade (1)-down-down",
+                "flashbang (1)-down-down",
+                "ped_grenade (1)-down-down",
+                "interference_grenade (1)-down-down",
+                "force_grenade-down-down",
+                "flashbang-down-down",
+                "ped_grenade-down-down",
+                "interference_grenade-down-down",
+                "force_grenade (1)-down (1)",
+                "flashbang (1)-down (1)",
+                "ped_grenade (1)-down (1)",
+                "interference_grenade (1)-down (1)",
+                "force_grenade-down (1)",
+                "flashbang-down (1)",
+                "ped_grenade-down (1)",
+                "interference_grenade-down (1)",
+                "force_grenade (1)-down",
+                "flashbang (1)-down",
+                "ped_grenade (1)-down",
+                "interference_grenade (1)-down",
+                "force_grenade-down",
+                "flashbang-down",
+                "ped_grenade-down",
+                "interference_grenade-down",
+                "force_grenade (1)",
+                "flashbang (1)",
+                "ped_grenade (1)",
+                "interference_grenade (1)",
+                "force_grenade",
+                "flashbang",
+                "ped_grenade",
+                "interference_grenade"
+            ]
+        },
+        {
+            "id": "Layer 11",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 9",
+            "is_open_in_editor": false
+        },
+        {
+            "id": "Layer 8",
+            "nodes": [
+                "dev_floor_32 (7)",
+                "dev_floor_32 (6)",
+                "dev_floor_32 (5)",
+                "dev_floor_32 (4)",
+                "dev_floor_32 (3)",
+                "dev_floor_32 (2)",
+                "dev_floor_32 (1)",
+                "dev_floor_32"
+            ]
+        },
+        {
+            "id": "Layer 7",
+            "nodes": [
+                "dev_floor_128 (2)",
+                "point_light (6)",
+                "point_light (5)",
+                "point_light (4)",
+                "dev_floor_128"
+            ]
+        },
+        {
+            "id": "weapons2-right",
+            "is_open_in_editor": false,
+            "nodes": [
+                "cyberspray-right",
+                "warx-right",
+                "sn69-right",
+                "ao44 (1)-right",
+                "calico-right",
+                "bulwark-right",
+                "covert-right",
+                "kek9-right",
+                "deagle-right",
+                "zamiec-right",
+                "galilea-right",
+                "gradobicie-right",
+                "pro90-right"
+            ]
+        },
+        {
+            "id": "weapons1-right",
+            "is_open_in_editor": false,
+            "nodes": [
+                "elon-right",
+                "lews-right",
+                "bulldup2000-right",
+                "awka-right",
+                "amplifier_arm-right",
+                "datum-right",
+                "szturm-right",
+                "bilmer2000-right",
+                "baka47-right",
+                "blunaz-right",
+                "hunter (1)-right"
+            ]
+        },
+        {
+            "id": "weapons1",
+            "is_open_in_editor": false,
+            "nodes": [
+                "elon",
+                "lews",
+                "bulldup2000",
+                "awka",
+                "amplifier_arm",
+                "datum",
+                "szturm",
+                "szkwal (1)",
+                "szkwal",
+                "bilmer2000",
+                "baka47",
+                "blunaz",
+                "hunter (1)"
+            ]
+        },
+        {
+            "id": "weapons2",
+            "is_open_in_editor": false,
+            "nodes": [
+                "cyberspray",
+                "warx",
+                "sn69",
+                "ao44 (1)",
+                "calico",
+                "bulwark",
+                "covert",
+                "kek9",
+                "deagle",
+                "zamiec",
+                "galilea",
+                "gradobicie",
+                "pro90"
+            ]
+        },
+        {
+            "id": "Layer 1",
+            "nodes": [
+                "team_spawn (32)",
+                "team_spawn (31)",
+                "team_spawn (30)",
+                "team_spawn (29)",
+                "team_spawn (28)",
+                "team_spawn (27)",
+                "team_spawn (26)",
+                "team_spawn (25)",
+                "team_spawn (24)",
+                "team_spawn (23)",
+                "team_spawn (22)",
+                "team_spawn (34)",
+                "team_spawn (21)",
+                "team_spawn (20)",
+                "team_spawn (19)",
+                "team_spawn (18)",
+                "team_spawn (17)",
+                "team_spawn (43)",
+                "team_spawn (42)",
+                "team_spawn (41)",
+                "team_spawn (40)",
+                "team_spawn (39)",
+                "team_spawn (38)",
+                "team_spawn (37)",
+                "team_spawn (36)",
+                "team_spawn (35)",
+                "team_spawn (16)",
+                "team_spawn (15)",
+                "team_spawn (14)",
+                "team_spawn (13)",
+                "team_spawn (12)",
+                "team_spawn (11)",
+                "team_spawn (8)",
+                "team_spawn (7)",
+                "team_spawn (6)",
+                "team_spawn (5)",
+                "team_spawn (4)",
+                "team_spawn (3)",
+                "team_spawn (33)",
+                "team_spawn (1)",
+                "team_spawn (9)",
+                "team_spawn (2)",
+                "team_spawn (10)",
+                "team_spawn",
+                "vent (8)",
+                "vent (7)",
+                "vent (6)",
+                "vent (5)",
+                "vent (1)",
+                "vent (2)",
+                "vent (3)",
+                "vent (4)",
+                "metal (8)-right",
+                "metal (6)-right (1)",
+                "metal (6)-right",
+                "metal (5)-right",
+                "glass (8)-right",
+                "glass (7)-right",
+                "glass (6)-right",
+                "glass (5)-right",
+                "wood (8)-right",
+                "wood (6)-right",
+                "metal (1)",
+                "metal (2)",
+                "metal (3)",
+                "metal (7)",
+                "metal (4)",
+                "glass (1)",
+                "glass (2)",
+                "glass (3)",
+                "glass (4)",
+                "wood (1)",
+                "wood (10)",
+                "wood (2)",
+                "wood (3)",
+                "wood (11)",
+                "wood (4)",
+                "glass",
+                "vent",
+                "metal",
+                "wood",
+                "dev_floor_64",
+                "dev_floor_64 (1)",
+                "water_room_floor_2 (1)-right (1)",
+                "water_room_floor_2 (1)-right",
+                "water_room_floor_2 (4)",
+                "water_room_floor_2 (1)",
+                "water_room_floor_2 (2)-right",
+                "water_room_floor_2 (2)",
+                "water_room_floor_2 (3)-right",
+                "water_room_floor_2 (3)",
+                "water_room_floor_2-right",
+                "resistance_backpack",
+                "metropolis_backpack",
+                "defuse_kit",
+                "electric_armor",
+                "water_room_floor_2",
+                "dev_floor_256"
+            ]
+        },
+        {
+            "id": "garden lights",
+            "nodes": [
+                "Strong lamp (2)"
+            ]
+        },
+        {
+            "id": "New layer",
+            "nodes": [
+                "Water room floor-brighter-right",
+                "dev_wall_128 (1)",
+                "dev_wall_128 (2)",
+                "dev_wall_128",
+                "Water room floor-brighter",
+                "Water room floor-brighter (1)"
+            ]
+        }
+    ],
+    "nodes": [
+        {
+            "id": "Water room floor-brighter (1)",
+            "type": "@water_room_floor",
+            "pos": [1920.0, 1408.0],
+            "size": [3968, 256],
+            "color": [255, 132, 132, 255]
+        },
+        {
+            "id": "Water room floor 2 (4)",
+            "type": "@water_room_floor_2",
+            "pos": [-352.0, 160.0],
+            "size": [13248, 2752]
+        },
+        {
+            "id": "dev_floor_256",
+            "type": "dev_floor_256",
+            "pos": [0.0, 5248.0],
+            "size": [1536, 7424]
+        },
+        {
+            "id": "wood (4)",
+            "type": "@materials/wood.png",
+            "pos": [-272.0, 3391.999755859375],
+            "size": [32, 128]
+        },
+        {
+            "id": "wood (3)",
+            "type": "@materials/wood.png",
+            "pos": [-288.0, 3520.0],
+            "size": [64, 128]
+        },
+        {
+            "id": "wood (2)",
+            "type": "@materials/wood.png",
+            "pos": [-304.0, 3648.0],
+            "size": [96, 128]
+        },
+        {
+            "id": "wood (1)",
+            "type": "@materials/wood.png",
+            "pos": [-320.0, 3775.999755859375],
+            "size": [128, 128]
+        },
+        {
+            "id": "glass (4)",
+            "type": "@materials/glass.png",
+            "pos": [-272.0, 3904.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "glass (3)",
+            "type": "@materials/glass.png",
+            "pos": [-288.0, 4032.0],
+            "size": [64, 128]
+        },
+        {
+            "id": "glass (2)",
+            "type": "@materials/glass.png",
+            "pos": [-304.0, 4160.0],
+            "size": [96, 128]
+        },
+        {
+            "id": "glass (1)",
+            "type": "@materials/glass.png",
+            "pos": [-320.0, 4288.0],
+            "size": [128, 128]
+        },
+        {
+            "id": "metal (4)",
+            "type": "@materials/metal.png",
+            "pos": [-272.0, 4448.0],
+            "size": [32, 64]
+        },
+        {
+            "id": "metal (3)",
+            "type": "@materials/metal.png",
+            "pos": [-288.0, 4544.0],
+            "size": [64, 128]
+        },
+        {
+            "id": "metal (2)",
+            "type": "@materials/metal.png",
+            "pos": [-304.0, 4672.0],
+            "size": [96, 128]
+        },
+        {
+            "id": "metal (1)",
+            "type": "@materials/metal.png",
+            "pos": [-320.0, 4800.0],
+            "size": [128, 128]
+        },
+        {
+            "id": "vent (4)",
+            "type": "@materials/vent.png",
+            "pos": [-272.0, 4928.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "vent (3)",
+            "type": "@materials/vent.png",
+            "pos": [-288.0, 5056.0],
+            "size": [64, 128]
+        },
+        {
+            "id": "vent (2)",
+            "type": "@materials/vent.png",
+            "pos": [-304.0, 5184.0],
+            "size": [96, 128]
+        },
+        {
+            "id": "vent (1)",
+            "type": "@materials/vent.png",
+            "pos": [-320.0, 5312.0],
+            "size": [128, 128]
+        },
+        {
+            "id": "glass",
+            "type": "@captions/glass.png",
+            "pos": [0.0, 3872.0],
+            "color": [0, 207, 255, 255]
+        },
+        {
+            "id": "wood",
+            "type": "@captions/wood.png",
+            "pos": [0.0, 3360.0]
+        },
+        {
+            "id": "metal",
+            "type": "@captions/metal.png",
+            "pos": [0.0, 4383.0]
+        },
+        {
+            "id": "vent",
+            "type": "@captions/vent.png",
+            "pos": [0.0, 4895.0]
+        },
+        {
+            "id": "vent (5)",
+            "type": "@materials/vent.png",
+            "pos": [272.0, 4928.0],
+            "size": [32, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "vent (6)",
+            "type": "@materials/vent.png",
+            "pos": [288.0, 5056.0],
+            "size": [64, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "vent (7)",
+            "type": "@materials/vent.png",
+            "pos": [304.0, 5184.0],
+            "size": [96, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "vent (8)",
+            "type": "@materials/vent.png",
+            "pos": [320.0, 5312.0],
+            "size": [128, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "wood (6)-right",
+            "type": "@materials/wood.png",
+            "pos": [288.0, 3520.0],
+            "size": [64, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "wood (8)-right",
+            "type": "@materials/wood.png",
+            "pos": [320.0, 3776.0],
+            "size": [128, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "glass (5)-right",
+            "type": "@materials/glass.png",
+            "pos": [272.0, 3904.0],
+            "size": [32, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "glass (6)-right",
+            "type": "@materials/glass.png",
+            "pos": [288.0, 4032.0],
+            "size": [64, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "glass (7)-right",
+            "type": "@materials/glass.png",
+            "pos": [304.0, 4160.0],
+            "size": [96, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "glass (8)-right",
+            "type": "@materials/glass.png",
+            "pos": [320.0, 4288.0],
+            "size": [128, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "metal (5)-right",
+            "type": "@materials/metal.png",
+            "pos": [272.0, 4416.0],
+            "size": [32, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "metal (6)-right",
+            "type": "@materials/metal.png",
+            "pos": [288.0, 4544.0],
+            "size": [64, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "metal (8)-right",
+            "type": "@materials/metal.png",
+            "pos": [320.0, 4800.0],
+            "size": [128, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "dev_floor_64 (1)",
+            "type": "dev_floor_64",
+            "pos": [-320.0, 4352.0],
+            "size": [128, 2048]
+        },
+        {
+            "id": "dev_floor_64",
+            "type": "dev_floor_64",
+            "pos": [320.0, 4352.0],
+            "size": [128, 2048]
+        },
+        {
+            "id": "dev_floor_128",
+            "type": "dev_floor_128",
+            "pos": [-448.0, 4352.0],
+            "size": [128, 2048]
+        },
+        {
+            "id": "dev_floor_128 (2)",
+            "type": "dev_floor_128",
+            "pos": [448.0, 4352.0],
+            "size": [128, 2048]
+        },
+        {
+            "id": "dev_floor_32",
+            "type": "dev_floor_32",
+            "pos": [-304.0, 3392.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (1)",
+            "type": "dev_floor_32",
+            "pos": [-304.0, 3904.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (2)",
+            "type": "dev_floor_32",
+            "pos": [-304.0, 4416.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (3)",
+            "type": "dev_floor_32",
+            "pos": [-304.0, 4928.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (4)",
+            "type": "dev_floor_32",
+            "pos": [304.0, 4928.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (5)",
+            "type": "dev_floor_32",
+            "pos": [304.0, 4416.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (6)",
+            "type": "dev_floor_32",
+            "pos": [304.0, 3904.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "dev_floor_32 (7)",
+            "type": "dev_floor_32",
+            "pos": [304.0, 3392.0],
+            "size": [32, 128]
+        },
+        {
+            "id": "Water room floor-brighter",
+            "type": "@water_room_floor",
+            "pos": [-3872.0, 5088.0],
+            "size": [6208, 7744]
+        },
+        {
+            "id": "water_room_floor_2",
+            "type": "@water_room_floor_2",
+            "pos": [-1056.0, 5248.0],
+            "size": [192, 7424]
+        },
+        {
+            "id": "water_room_floor_2 (1)",
+            "type": "@water_room_floor_2",
+            "pos": [-1920.0, 5248.0],
+            "size": [384, 7424]
+        },
+        {
+            "id": "water_room_floor_2 (2)",
+            "type": "@water_room_floor_2",
+            "pos": [-1440.0, 5248.0],
+            "size": [192, 7424]
+        },
+        {
+            "id": "water_room_floor_2 (3)",
+            "type": "@water_room_floor_2",
+            "pos": [-800.0, 5248.0],
+            "size": [64, 7424]
+        },
+        {
+            "id": "water_room_floor_2 (1)-right",
+            "type": "@water_room_floor_2",
+            "pos": [1920.0, 5248.0],
+            "size": [384, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "water_room_floor_2 (2)-right",
+            "type": "@water_room_floor_2",
+            "pos": [1440.0, 5248.0],
+            "size": [192, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "water_room_floor_2 (3)-right",
+            "type": "@water_room_floor_2",
+            "pos": [800.0, 5248.0],
+            "size": [64, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "water_room_floor_2-right",
+            "type": "@water_room_floor_2",
+            "pos": [1056.0, 5248.0],
+            "size": [192, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "Water room floor-brighter-right",
+            "type": "@water_room_floor",
+            "pos": [2336.0, 5248.0],
+            "size": [3136, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "water_room_floor_2 (1)-right (1)",
+            "type": "@water_room_floor_2",
+            "pos": [5088.0, 5248.0],
+            "size": [2368, 7424],
+            "flip_horizontally": true
+        },
+        {
+            "id": "crate",
+            "type": "crate",
+            "pos": [-30.000001907348633, 2354.0]
+        },
+        {
+            "id": "crate (1)",
+            "type": "crate",
+            "pos": [-337.0, 3202.0],
+            "rotation": 0.49795693159103394,
+            "shadow_height_mult": 0.6140000224113464
+        },
+        {
+            "id": "wood (10)",
+            "type": "@materials/wood.png",
+            "pos": [304.0, 3648.0],
+            "size": [96, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "wood (11)",
+            "type": "@materials/wood.png",
+            "pos": [272.0, 3391.999755859375],
+            "size": [32, 128]
+        },
+        {
+            "id": "metal (7)",
+            "type": "@materials/metal.png",
+            "pos": [-272.0, 4384.0],
+            "size": [32, 64]
+        },
+        {
+            "id": "metal (6)-right (1)",
+            "type": "@materials/metal.png",
+            "pos": [304.0, 4672.0],
+            "size": [96, 128],
+            "flip_horizontally": true
+        },
+        {
+            "id": "water_room_floor_2 (4)",
+            "type": "@water_room_floor_2",
+            "pos": [-2464.0, 3840.0],
+            "size": [192, 1536]
+        },
+        {
+            "id": "dev_wall_256",
+            "type": "dev_wall_256",
+            "pos": [-7040.0, 1792.0],
+            "size": [6144, 10240]
+        },
+        {
+            "id": "dev_wall_256 (1)",
+            "type": "dev_wall_256",
+            "pos": [-3072.0, -1024.0],
+            "size": [1792, 4608]
+        },
+        {
+            "id": "dev_wall_256 (2)",
+            "type": "dev_wall_256",
+            "pos": [3072.0, 896.0],
+            "size": [1792, 768]
+        },
+        {
+            "id": "dev_wall_256 (3)",
+            "type": "dev_wall_256",
+            "pos": [6016.0, 3712.0],
+            "size": [4096, 6400]
+        },
+        {
+            "id": "dev_wall_256 (4)",
+            "type": "dev_wall_256",
+            "pos": [-1024.0, 9344.0],
+            "size": [18176, 4864]
+        },
+        {
+            "id": "dev_floor_256 (1)",
+            "type": "dev_floor_256",
+            "pos": [-3328.0, 3840.0],
+            "size": [1792, 1536]
+        },
+        {
+            "id": "dev_wall_128",
+            "type": "dev_wall_128",
+            "pos": [-3775.999755859375, 4160.0]
+        },
+        {
+            "id": "dev_wall_128 (2)",
+            "type": "dev_wall_128",
+            "pos": [-3391.999755859375, 3520.0]
+        },
+        {
+            "id": "dev_wall_128 (1)",
+            "type": "dev_wall_128",
+            "pos": [-3264.0, 4032.0]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3558.0, 3220.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3558.0, 3220.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3558.0, 3183.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3558.0, 3183.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body (1)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3611.0, 3220.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (1)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3611.0, 3220.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (1)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3611.0, 3183.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (1)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3611.0, 3183.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body (2)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3558.0, 4502.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (2)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3558.0, 4502.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (2)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3558.0, 4465.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (2)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3558.0, 4465.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body (3)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3611.0, 4502.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (3)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3611.0, 4502.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (3)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-3611.0, 4465.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (3)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-3611.0, 4465.0],
+            "rotation": -180.0,
+            "color": [0, 157, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "dev_wall_256 (5)",
+            "type": "dev_wall_256",
+            "pos": [2944.0, -1408.0],
+            "size": [10240, 3840]
+        },
+        {
+            "id": "zoom_0.8x",
+            "type": "@zoom",
+            "pos": [-640.0, 3712.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "zoom_1x",
+            "type": "@zoom",
+            "pos": [-640.0, 3456.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "faction_resistance",
+            "type": "@resistance_head_icon",
+            "pos": [-2560.0, 2944.0]
+        },
+        {
+            "id": "faction_metropolis",
+            "type": "@metropolis_head_icon",
+            "pos": [-2560.0, 2691.0]
+        },
+        {
+            "id": "faction_resistance_outline",
+            "type": "@pad_outline",
+            "pos": [-2560.0, 2944.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "faction_metropolis_outline",
+            "type": "@pad_outline",
+            "pos": [-2560.0, 2688.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_4x",
+            "type": "@zoom",
+            "pos": [-384.0, 2688.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "zoom_0.75x",
+            "type": "@zoom",
+            "pos": [-640.0, 3968.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "zoom_0.7x",
+            "type": "@zoom",
+            "pos": [-640.0, 4224.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "zoom_0.5x",
+            "type": "@zoom",
+            "pos": [-640.0, 4736.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "dev_floor_256 (5)",
+            "type": "dev_floor_256",
+            "pos": [-3200.0, 2816.0],
+            "size": [1536, 512]
+        },
+        {
+            "id": "zoom_0.6x",
+            "type": "@zoom",
+            "pos": [-640.0, 4480.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "zoom_1x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 3456.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_4x_outline",
+            "type": "@pad_outline",
+            "pos": [-384.0, 2688.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_0.8x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 3712.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_0.75x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 3968.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_0.7x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 4224.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_0.6x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 4480.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_0.5x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 4736.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_2x_outline",
+            "type": "@pad_outline",
+            "pos": [-640.0, 2688.0],
+            "color": [255, 0, 255, 20]
+        },
+        {
+            "id": "zoom_2x",
+            "type": "@zoom",
+            "pos": [-640.0, 2688.0],
+            "size": [64, 64]
+        },
+        {
+            "id": "crate (2)",
+            "type": "crate",
+            "pos": [360.0, 2903.0]
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (4)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-126.0, 2254.0],
+            "rotation": -180.0,
+            "color": [255, 0, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (4)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-126.0, 2217.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (4)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-126.0, 2217.0],
+            "rotation": -180.0,
+            "color": [255, 0, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body (4)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-179.0, 2254.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (5)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-179.0, 2254.0],
+            "rotation": -180.0,
+            "color": [255, 0, 255, 255]
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (5)",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-179.0, 2217.0],
+            "rotation": -180.0,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (5)",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [-179.0, 2217.0],
+            "rotation": -180.0,
+            "color": [255, 0, 255, 255],
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (4)-down",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [-126.0, 2254.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (5)-right",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [600.0, 2730.0],
+            "rotation": -180.0,
+            "color": [0, 255, 0, 255],
+            "flip_horizontally": true,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (5)-right",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [600.0, 2730.0],
+            "rotation": -180.0,
+            "flip_horizontally": true,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (5)-right",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [600.0, 2767.0],
+            "rotation": -180.0,
+            "color": [0, 255, 0, 255],
+            "flip_horizontally": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body (4)-right",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [600.0, 2767.0],
+            "rotation": -180.0,
+            "flip_horizontally": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light-down (4)-right",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [547.0, 2730.0],
+            "rotation": -180.0,
+            "color": [0, 255, 0, 255],
+            "flip_horizontally": true,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (4)-down-right",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [547.0, 2767.0],
+            "rotation": -180.0,
+            "flip_horizontally": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_body-down (4)-right",
+            "type": "aquarium_bottom_lamp_body",
+            "pos": [547.0, 2730.0],
+            "rotation": -180.0,
+            "flip_horizontally": true,
+            "flip_vertically": true
+        },
+        {
+            "id": "aquarium_bottom_lamp_light (4)-right",
+            "type": "aquarium_bottom_lamp_light",
+            "pos": [547.0, 2767.0],
+            "rotation": -180.0,
+            "color": [0, 255, 0, 255],
+            "flip_horizontally": true
+        },
+        {
+            "id": "aquarium_ambience_left",
+            "type": "aquarium_ambience_left",
+            "pos": [-619.0, 1274.0]
+        },
+        {
+            "id": "aquarium_ambience_right",
+            "type": "aquarium_ambience_right",
+            "pos": [825.0, 1292.0]
+        },
+        {
+            "id": "Strong lamp (2)",
+            "type": "point_light",
+            "pos": [2945.0, 1297.0],
+            "color": [255, 183, 71, 94],
+            "falloff": {
+                "radius": 752.2059936523438,
+                "intensity": 0.8100000023841858,
+                "falloff": 0.46000000834465027
+            },
+            "wall_falloff": {
+                "radius": 962.9630126953125,
+                "intensity": 0.6600000262260437
+            }
+        },
+        {
+            "id": "point_light (4)",
+            "type": "point_light",
+            "pos": [1.0, 4095.0],
+            "color": [0, 180, 255, 65],
+            "falloff": {
+                "radius": 676.364013671875,
+                "intensity": 0.9300000071525574,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "point_light (5)",
+            "type": "point_light",
+            "pos": [-1.0, 4609.0],
+            "color": [255, 255, 255, 13],
+            "falloff": {
+                "radius": 676.364013671875,
+                "intensity": 1.399999976158142,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0,
+            "height": 0.0
+        },
+        {
+            "id": "point_light (6)",
+            "type": "point_light",
+            "pos": [-1.0, 5117.0],
+            "color": [0, 255, 126, 46],
+            "falloff": {
+                "radius": 676.364013671875,
+                "intensity": 1.1200000047683716,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0,
+            "height": 100.0
+        },
+        {
+            "id": "point_light",
+            "type": "point_light",
+            "pos": [-3585.0, 4483.0],
+            "color": [0, 157, 255, 41],
+            "falloff": {
+                "radius": 1240.0,
+                "intensity": 1.2400000095367432,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0,
+            "cast_shadows": false
+        },
+        {
+            "id": "point_light (2)",
+            "type": "point_light",
+            "pos": [-3585.0, 3201.0],
+            "color": [0, 157, 255, 41],
+            "falloff": {
+                "radius": 1240.0,
+                "intensity": 1.2400000095367432,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0,
+            "cast_shadows": false
+        },
+        {
+            "id": "point_light (3)",
+            "type": "point_light",
+            "pos": [-3777.0, 4161.0],
+            "falloff": {
+                "radius": 221.8179931640625,
+                "intensity": 0.7599999904632568,
+                "falloff": 0.4699999988079071
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "point_light (7)",
+            "type": "point_light",
+            "pos": [-3265.0, 4033.0],
+            "falloff": {
+                "radius": 221.8179931640625,
+                "intensity": 0.7599999904632568,
+                "falloff": 0.4699999988079071
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "point_light (8)",
+            "type": "point_light",
+            "pos": [-3393.0, 3521.0],
+            "falloff": {
+                "radius": 221.8179931640625,
+                "intensity": 0.7599999904632568,
+                "falloff": 0.4699999988079071
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "point_light (9)",
+            "type": "point_light",
+            "pos": [-153.0, 2234.0],
+            "color": [255, 0, 255, 60],
+            "falloff": {
+                "radius": 676.364013671875,
+                "intensity": 0.9800000190734863,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "point_light (9)-right",
+            "type": "point_light",
+            "pos": [574.0, 2747.0],
+            "color": [0, 255, 0, 60],
+            "falloff": {
+                "radius": 676.364013671875,
+                "intensity": 0.9800000190734863,
+                "falloff": 0.0
+            },
+            "intensity_vibration": 0.0
+        },
+        {
+            "id": "interference_grenade",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 3293.0]
+        },
+        {
+            "id": "ped_grenade",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 3298.0]
+        },
+        {
+            "id": "flashbang",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 3298.0]
+        },
+        {
+            "id": "force_grenade",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 3298.0]
+        },
+        {
+            "id": "interference_grenade (1)",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 3453.0]
+        },
+        {
+            "id": "ped_grenade (1)",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 3458.000244140625]
+        },
+        {
+            "id": "flashbang (1)",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 3458.000244140625]
+        },
+        {
+            "id": "force_grenade (1)",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 3458.000244140625]
+        },
+        {
+            "id": "interference_grenade-down",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 3778.0]
+        },
+        {
+            "id": "ped_grenade-down",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 3773.0]
+        },
+        {
+            "id": "flashbang-down",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 3773.0]
+        },
+        {
+            "id": "force_grenade-down",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 3773.0]
+        },
+        {
+            "id": "interference_grenade (1)-down",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 3618.0]
+        },
+        {
+            "id": "ped_grenade (1)-down",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 3613.0]
+        },
+        {
+            "id": "flashbang (1)-down",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 3613.0]
+        },
+        {
+            "id": "force_grenade (1)-down",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 3613.0]
+        },
+        {
+            "id": "interference_grenade-down (1)",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 4418.0]
+        },
+        {
+            "id": "ped_grenade-down (1)",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 4413.0]
+        },
+        {
+            "id": "flashbang-down (1)",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 4413.0]
+        },
+        {
+            "id": "force_grenade-down (1)",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 4413.0]
+        },
+        {
+            "id": "interference_grenade (1)-down (1)",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 4258.0]
+        },
+        {
+            "id": "ped_grenade (1)-down (1)",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 4253.0]
+        },
+        {
+            "id": "flashbang (1)-down (1)",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 4253.0]
+        },
+        {
+            "id": "force_grenade (1)-down (1)",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 4253.0]
+        },
+        {
+            "id": "interference_grenade-down-down",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 3933.000244140625]
+        },
+        {
+            "id": "ped_grenade-down-down",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 3938.0]
+        },
+        {
+            "id": "flashbang-down-down",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 3938.0]
+        },
+        {
+            "id": "force_grenade-down-down",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 3938.0]
+        },
+        {
+            "id": "interference_grenade (1)-down-down",
+            "type": "interference_grenade",
+            "pos": [-2071.0, 4093.0]
+        },
+        {
+            "id": "ped_grenade (1)-down-down",
+            "type": "ped_grenade",
+            "pos": [-1970.9998779296875, 4098.0]
+        },
+        {
+            "id": "flashbang (1)-down-down",
+            "type": "flashbang",
+            "pos": [-1870.9998779296875, 4098.0]
+        },
+        {
+            "id": "force_grenade (1)-down-down",
+            "type": "force_grenade",
+            "pos": [-1770.9998779296875, 4098.0]
+        },
+        {
+            "id": "interference_grenade (2)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 3293.0]
+        },
+        {
+            "id": "ped_grenade (2)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 3298.0]
+        },
+        {
+            "id": "flashbang (2)",
+            "type": "flashbang",
+            "pos": [1969.0, 3298.0]
+        },
+        {
+            "id": "force_grenade (2)",
+            "type": "force_grenade",
+            "pos": [2069.0, 3298.0]
+        },
+        {
+            "id": "interference_grenade (3)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 3453.0]
+        },
+        {
+            "id": "ped_grenade (3)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 3458.000244140625]
+        },
+        {
+            "id": "flashbang (3)",
+            "type": "flashbang",
+            "pos": [1969.0, 3458.000244140625]
+        },
+        {
+            "id": "force_grenade (3)",
+            "type": "force_grenade",
+            "pos": [2069.0, 3458.000244140625]
+        },
+        {
+            "id": "interference_grenade-down (2)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 3778.0]
+        },
+        {
+            "id": "ped_grenade-down (2)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 3773.0]
+        },
+        {
+            "id": "flashbang-down (2)",
+            "type": "flashbang",
+            "pos": [1969.0, 3773.0]
+        },
+        {
+            "id": "force_grenade-down (2)",
+            "type": "force_grenade",
+            "pos": [2069.0, 3773.0]
+        },
+        {
+            "id": "interference_grenade (1)-down (2)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 3618.0]
+        },
+        {
+            "id": "ped_grenade (1)-down (2)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 3613.0]
+        },
+        {
+            "id": "flashbang (1)-down (2)",
+            "type": "flashbang",
+            "pos": [1969.0, 3613.0]
+        },
+        {
+            "id": "force_grenade (1)-down (2)",
+            "type": "force_grenade",
+            "pos": [2069.0, 3613.0]
+        },
+        {
+            "id": "interference_grenade-down (3)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 4418.0]
+        },
+        {
+            "id": "ped_grenade-down (3)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 4413.0]
+        },
+        {
+            "id": "flashbang-down (3)",
+            "type": "flashbang",
+            "pos": [1969.0, 4413.0]
+        },
+        {
+            "id": "force_grenade-down (3)",
+            "type": "force_grenade",
+            "pos": [2069.0, 4413.0]
+        },
+        {
+            "id": "interference_grenade (1)-down (3)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 4258.0]
+        },
+        {
+            "id": "ped_grenade (1)-down (3)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 4253.0]
+        },
+        {
+            "id": "flashbang (1)-down (3)",
+            "type": "flashbang",
+            "pos": [1969.0, 4253.0]
+        },
+        {
+            "id": "force_grenade (1)-down (3)",
+            "type": "force_grenade",
+            "pos": [2069.0, 4253.0]
+        },
+        {
+            "id": "interference_grenade-down-down (1)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 3933.000244140625]
+        },
+        {
+            "id": "ped_grenade-down-down (1)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 3938.0]
+        },
+        {
+            "id": "flashbang-down-down (1)",
+            "type": "flashbang",
+            "pos": [1969.0, 3938.0]
+        },
+        {
+            "id": "force_grenade-down-down (1)",
+            "type": "force_grenade",
+            "pos": [2069.0, 3938.0]
+        },
+        {
+            "id": "interference_grenade (1)-down-down (1)",
+            "type": "interference_grenade",
+            "pos": [1769.0, 4093.0]
+        },
+        {
+            "id": "ped_grenade (1)-down-down (1)",
+            "type": "ped_grenade",
+            "pos": [1869.0, 4098.0]
+        },
+        {
+            "id": "flashbang (1)-down-down (1)",
+            "type": "flashbang",
+            "pos": [1969.0, 4098.0]
+        },
+        {
+            "id": "force_grenade (1)-down-down (1)",
+            "type": "force_grenade",
+            "pos": [2069.0, 4098.0]
+        },
+        {
+            "id": "bomb",
+            "type": "bomb",
+            "pos": [-2171.0, 2988.0]
+        },
+        {
+            "id": "bomb (1)",
+            "type": "bomb",
+            "pos": [-2271.0, 2988.0]
+        },
+        {
+            "id": "mini_knife",
+            "type": "mini_knife",
+            "pos": [-1306.0, 4613.0]
+        },
+        {
+            "id": "cyan_scythe",
+            "type": "cyan_scythe",
+            "pos": [-1306.0, 4713.0]
+        },
+        {
+            "id": "yellow_dagger",
+            "type": "yellow_dagger",
+            "pos": [-1306.0, 4813.0]
+        },
+        {
+            "id": "poseidon",
+            "type": "poseidon",
+            "pos": [-1306.0, 5013.0]
+        },
+        {
+            "id": "fury_thrower",
+            "type": "fury_thrower",
+            "pos": [-1306.0, 5113.0]
+        },
+        {
+            "id": "assault_rattle",
+            "type": "assault_rattle",
+            "pos": [-1306.0, 5213.0]
+        },
+        {
+            "id": "mini_knife-right",
+            "type": "mini_knife",
+            "pos": [-1177.0001220703125, 4614.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "cyan_scythe-right",
+            "type": "cyan_scythe",
+            "pos": [-1177.0001220703125, 4714.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "yellow_dagger-right",
+            "type": "yellow_dagger",
+            "pos": [-1177.0001220703125, 4814.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "poseidon-right",
+            "type": "poseidon",
+            "pos": [-1177.0001220703125, 5014.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "fury_thrower-right",
+            "type": "fury_thrower",
+            "pos": [-1177.0001220703125, 5114.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "assault_rattle-right",
+            "type": "assault_rattle",
+            "pos": [-1177.0001220703125, 5214.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "mini_knife (1)",
+            "type": "mini_knife",
+            "pos": [1174.0, 4613.0]
+        },
+        {
+            "id": "cyan_scythe (1)",
+            "type": "cyan_scythe",
+            "pos": [1174.0, 4713.0]
+        },
+        {
+            "id": "yellow_dagger (1)",
+            "type": "yellow_dagger",
+            "pos": [1174.0, 4813.0]
+        },
+        {
+            "id": "poseidon (1)",
+            "type": "poseidon",
+            "pos": [1174.0, 5013.0]
+        },
+        {
+            "id": "fury_thrower (1)",
+            "type": "fury_thrower",
+            "pos": [1174.0, 5113.0]
+        },
+        {
+            "id": "assault_rattle (1)",
+            "type": "assault_rattle",
+            "pos": [1174.0, 5213.0]
+        },
+        {
+            "id": "mini_knife-right (1)",
+            "type": "mini_knife",
+            "pos": [1303.0, 4614.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "cyan_scythe-right (1)",
+            "type": "cyan_scythe",
+            "pos": [1303.0, 4714.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "yellow_dagger-right (1)",
+            "type": "yellow_dagger",
+            "pos": [1303.0, 4814.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "poseidon-right (1)",
+            "type": "poseidon",
+            "pos": [1303.0, 5014.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "fury_thrower-right (1)",
+            "type": "fury_thrower",
+            "pos": [1303.0, 5114.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "assault_rattle-right (1)",
+            "type": "assault_rattle",
+            "pos": [1303.0, 5214.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "electric_rapier",
+            "type": "electric_rapier",
+            "pos": [-1305.0, 4913.0]
+        },
+        {
+            "id": "electric_rapier-right",
+            "type": "electric_rapier",
+            "pos": [-1177.0, 4913.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "electric_rapier (1)",
+            "type": "electric_rapier",
+            "pos": [1174.0, 4913.0]
+        },
+        {
+            "id": "electric_rapier-right (1)",
+            "type": "electric_rapier",
+            "pos": [1303.0, 4913.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "sword",
+            "type": "sword",
+            "pos": [-1306.0, 5313.0]
+        },
+        {
+            "id": "sword-right",
+            "type": "sword",
+            "pos": [-1177.0, 5314.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "sword-right (1)",
+            "type": "sword",
+            "pos": [1303.0001220703125, 5313.0],
+            "rotation": 180.0
+        },
+        {
+            "id": "sword (1)",
+            "type": "sword",
+            "pos": [1174.0, 5313.0]
+        },
+        {
+            "id": "sn69",
+            "type": "sn69",
+            "pos": [-1056.0, 3300.0]
+        },
+        {
+            "id": "kek9",
+            "type": "kek9",
+            "pos": [-1056.0, 3400.0]
+        },
+        {
+            "id": "bulwark",
+            "type": "bulwark",
+            "pos": [-1056.0, 3500.0]
+        },
+        {
+            "id": "calico",
+            "type": "calico",
+            "pos": [-1056.0, 3600.0]
+        },
+        {
+            "id": "ao44 (1)",
+            "type": "ao44",
+            "pos": [-1056.0, 3700.0]
+        },
+        {
+            "id": "covert",
+            "type": "covert",
+            "pos": [-1056.0, 3800.0]
+        },
+        {
+            "id": "deagle",
+            "type": "deagle",
+            "pos": [-1056.0, 3900.0]
+        },
+        {
+            "id": "gradobicie",
+            "type": "gradobicie",
+            "pos": [-1056.0, 4300.0]
+        },
+        {
+            "id": "galilea",
+            "type": "galilea",
+            "pos": [-1440.0, 3300.0]
+        },
+        {
+            "id": "zamiec",
+            "type": "zamiec",
+            "pos": [-1056.0, 4000.0]
+        },
+        {
+            "id": "cyberspray",
+            "type": "cyberspray",
+            "pos": [-1056.0, 4100.0]
+        },
+        {
+            "id": "pro90",
+            "type": "pro90",
+            "pos": [-1056.0, 4200.0]
+        },
+        {
+            "id": "warx",
+            "type": "warx",
+            "pos": [-1056.0, 4400.0]
+        },
+        {
+            "id": "hunter (1)",
+            "type": "hunter",
+            "pos": [-1440.0, 3400.0]
+        },
+        {
+            "id": "blunaz",
+            "type": "blunaz",
+            "pos": [-1440.0, 3500.0]
+        },
+        {
+            "id": "baka47",
+            "type": "baka47",
+            "pos": [-1440.0, 3600.0]
+        },
+        {
+            "id": "bilmer2000",
+            "type": "bilmer2000",
+            "pos": [-1440.0, 3700.0]
+        },
+        {
+            "id": "szkwal",
+            "type": "szkwal",
+            "pos": [-897.0, 4300.0]
+        },
+        {
+            "id": "szturm",
+            "type": "szturm",
+            "pos": [-1440.0, 3800.0]
+        },
+        {
+            "id": "datum",
+            "type": "datum",
+            "pos": [-1440.0, 3900.0]
+        },
+        {
+            "id": "amplifier_arm",
+            "type": "amplifier_arm",
+            "pos": [-1440.0, 4000.0]
+        },
+        {
+            "id": "awka",
+            "type": "awka",
+            "pos": [-1440.0, 4100.0]
+        },
+        {
+            "id": "bulldup2000",
+            "type": "bulldup2000",
+            "pos": [-1440.0, 4200.0]
+        },
+        {
+            "id": "lews",
+            "type": "lews",
+            "pos": [-1440.0, 4300.0]
+        },
+        {
+            "id": "elon",
+            "type": "elon",
+            "pos": [-1440.0, 4400.0]
+        },
+        {
+            "id": "elon-right",
+            "type": "elon",
+            "pos": [1060.0, 4400.0]
+        },
+        {
+            "id": "lews-right",
+            "type": "lews",
+            "pos": [1063.0, 4300.0]
+        },
+        {
+            "id": "bulldup2000-right",
+            "type": "bulldup2000",
+            "pos": [1060.0, 4200.0]
+        },
+        {
+            "id": "awka-right",
+            "type": "awka",
+            "pos": [1060.0, 4100.0]
+        },
+        {
+            "id": "amplifier_arm-right",
+            "type": "amplifier_arm",
+            "pos": [1060.0, 4000.0]
+        },
+        {
+            "id": "datum-right",
+            "type": "datum",
+            "pos": [1060.0, 3900.0]
+        },
+        {
+            "id": "szturm-right",
+            "type": "szturm",
+            "pos": [1063.0, 3800.0]
+        },
+        {
+            "id": "bilmer2000-right",
+            "type": "bilmer2000",
+            "pos": [1060.0, 3700.0]
+        },
+        {
+            "id": "baka47-right",
+            "type": "baka47",
+            "pos": [1060.0, 3600.0]
+        },
+        {
+            "id": "blunaz-right",
+            "type": "blunaz",
+            "pos": [1060.0, 3500.0]
+        },
+        {
+            "id": "hunter (1)-right",
+            "type": "hunter",
+            "pos": [1060.0, 3400.0]
+        },
+        {
+            "id": "cyberspray-right",
+            "type": "cyberspray",
+            "pos": [1447.0, 4100.0]
+        },
+        {
+            "id": "warx-right",
+            "type": "warx",
+            "pos": [1447.0, 4400.0]
+        },
+        {
+            "id": "sn69-right",
+            "type": "sn69",
+            "pos": [1447.0, 3300.0]
+        },
+        {
+            "id": "ao44 (1)-right",
+            "type": "ao44",
+            "pos": [1444.0, 3700.0]
+        },
+        {
+            "id": "calico-right",
+            "type": "calico",
+            "pos": [1444.0, 3600.0]
+        },
+        {
+            "id": "bulwark-right",
+            "type": "bulwark",
+            "pos": [1444.0, 3500.0]
+        },
+        {
+            "id": "covert-right",
+            "type": "covert",
+            "pos": [1447.0, 3800.0]
+        },
+        {
+            "id": "kek9-right",
+            "type": "kek9",
+            "pos": [1444.0, 3400.0]
+        },
+        {
+            "id": "deagle-right",
+            "type": "deagle",
+            "pos": [1444.0, 3900.0]
+        },
+        {
+            "id": "zamiec-right",
+            "type": "zamiec",
+            "pos": [1447.0, 4000.0]
+        },
+        {
+            "id": "galilea-right",
+            "type": "galilea",
+            "pos": [1060.0, 3300.0]
+        },
+        {
+            "id": "gradobicie-right",
+            "type": "gradobicie",
+            "pos": [1444.0, 4300.0]
+        },
+        {
+            "id": "pro90-right",
+            "type": "pro90",
+            "pos": [1447.0, 4200.0]
+        },
+        {
+            "id": "szczur",
+            "type": "szczur",
+            "pos": [-899.0, 4000.0]
+        },
+        {
+            "id": "vindicator",
+            "type": "vindicator",
+            "pos": [-897.0, 4100.0]
+        },
+        {
+            "id": "bilmik",
+            "type": "bilmik",
+            "pos": [-897.0, 4200.0]
+        },
+        {
+            "id": "bilmik (1)",
+            "type": "bilmik",
+            "pos": [1601.0, 4300.0]
+        },
+        {
+            "id": "vindicator (2)",
+            "type": "vindicator",
+            "pos": [1601.0, 4200.0]
+        },
+        {
+            "id": "szczur (2)",
+            "type": "szczur",
+            "pos": [1599.0, 4100.0]
+        },
+        {
+            "id": "szkwal (1)",
+            "type": "szkwal",
+            "pos": [1601.0, 4400.0]
+        },
+        {
+            "id": "electric_armor",
+            "type": "electric_armor",
+            "pos": [-2071.0, 2992.0]
+        },
+        {
+            "id": "defuse_kit",
+            "type": "defuse_kit",
+            "pos": [-1971.0, 2992.0]
+        },
+        {
+            "id": "metropolis_backpack",
+            "type": "metropolis_backpack",
+            "pos": [-1871.0, 2992.0]
+        },
+        {
+            "id": "resistance_backpack",
+            "type": "resistance_backpack",
+            "pos": [-1771.0, 2992.0]
+        },
+        {
+            "id": "gold_coin (2)",
+            "type": "gold_coin",
+            "pos": [-3179.0, 4084.999755859375]
+        },
+        {
+            "id": "gold_coin (1)",
+            "type": "gold_coin",
+            "pos": [-3179.0, 4027.0]
+        },
+        {
+            "id": "gold_coin",
+            "type": "gold_coin",
+            "pos": [-3179.0, 3979.0]
+        },
+        {
+            "id": "green_coin (3)",
+            "type": "green_coin",
+            "pos": [-3866.999755859375, 4213.0]
+        },
+        {
+            "id": "green_coin (4)",
+            "type": "green_coin",
+            "pos": [-3866.999755859375, 4155.0]
+        },
+        {
+            "id": "green_coin (5)",
+            "type": "green_coin",
+            "pos": [-3866.999755859375, 4107.0]
+        },
+        {
+            "id": "platinum_coin (2)",
+            "type": "platinum_coin",
+            "pos": [-3304.0, 3575.999755859375]
+        },
+        {
+            "id": "platinum_coin (1)",
+            "type": "platinum_coin",
+            "pos": [-3304.0, 3518.0]
+        },
+        {
+            "id": "platinum_coin",
+            "type": "platinum_coin",
+            "pos": [-3304.0, 3470.0]
+        },
+        {
+            "id": "crystal_coin (3)",
+            "type": "crystal_coin",
+            "pos": [-3634.999755859375, 3202.0]
+        },
+        {
+            "id": "crystal_coin (4)",
+            "type": "crystal_coin",
+            "pos": [-3584.999755859375, 3202.0]
+        },
+        {
+            "id": "crystal_coin (5)",
+            "type": "crystal_coin",
+            "pos": [-3534.999755859375, 3202.0]
+        },
+        {
+            "id": "crystal_coin (6)",
+            "type": "crystal_coin",
+            "pos": [-3634.999755859375, 4483.0]
+        },
+        {
+            "id": "crystal_coin (7)",
+            "type": "crystal_coin",
+            "pos": [-3584.999755859375, 4483.0]
+        },
+        {
+            "id": "crystal_coin (8)",
+            "type": "crystal_coin",
+            "pos": [-3534.999755859375, 4483.0]
+        },
+        {
+            "id": "aquarium",
+            "type": "aquarium",
+            "pos": [0.0, 896.0],
+            "size": [4352, 768]
+        },
+        {
+            "id": "team_spawn",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-195.0, 3903.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (2)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-195.0, 4289.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (9)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 4161.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (10)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 4031.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (1)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-193.0, 3393.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (3)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-195.0, 3521.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (4)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-193.0, 3779.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (5)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-195.0, 3651.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (6)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 4413.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (7)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-199.0, 4541.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (8)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 4799.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (11)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-199.0, 4671.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (12)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 4925.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (13)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-199.0, 5053.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (14)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-197.0, 5311.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (15)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-199.0, 5183.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "range_spawn",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [1231.0, 5753.0],
+            "rotation": 90.0
+        },
+        {
+            "id": "team_spawn (17)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [451.0, 3903.0]
+        },
+        {
+            "id": "team_spawn (18)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 4031.0]
+        },
+        {
+            "id": "team_spawn (19)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [451.0, 4289.0]
+        },
+        {
+            "id": "team_spawn (20)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 4161.0]
+        },
+        {
+            "id": "team_spawn (21)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [449.0, 3393.0]
+        },
+        {
+            "id": "team_spawn (22)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [451.0, 3521.0]
+        },
+        {
+            "id": "team_spawn (23)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [449.0, 3779.0]
+        },
+        {
+            "id": "team_spawn (24)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [451.0, 3651.0]
+        },
+        {
+            "id": "team_spawn (25)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 4413.0]
+        },
+        {
+            "id": "team_spawn (26)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [455.0, 4541.0]
+        },
+        {
+            "id": "team_spawn (27)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 4799.0]
+        },
+        {
+            "id": "team_spawn (28)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [455.0, 4671.0]
+        },
+        {
+            "id": "team_spawn (29)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 4925.0]
+        },
+        {
+            "id": "team_spawn (30)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [455.0, 5053.0]
+        },
+        {
+            "id": "team_spawn (31)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [453.0, 5311.0]
+        },
+        {
+            "id": "team_spawn (32)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [455.0, 5183.0]
+        },
+        {
+            "id": "team_spawn (33)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-193.0, 3201.0],
+            "rotation": -180.0
+        },
+        {
+            "id": "team_spawn (34)",
+            "type": "team_spawn",
+            "faction": "RESISTANCE",
+            "pos": [455.0, 3201.0]
+        },
+        {
+            "id": "team_spawn (16)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2493.0, 3775.0]
+        },
+        {
+            "id": "team_spawn (35)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2491.0, 3903.0]
+        },
+        {
+            "id": "team_spawn (36)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2493.0, 4161.0]
+        },
+        {
+            "id": "team_spawn (37)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2491.0, 4033.0]
+        },
+        {
+            "id": "team_spawn (38)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2495.0, 3265.0]
+        },
+        {
+            "id": "team_spawn (39)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2493.0, 3393.0]
+        },
+        {
+            "id": "team_spawn (40)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2495.0, 3651.0]
+        },
+        {
+            "id": "team_spawn (41)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2493.0, 3523.0]
+        },
+        {
+            "id": "team_spawn (42)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2491.0, 4285.0]
+        },
+        {
+            "id": "team_spawn (43)",
+            "type": "team_spawn",
+            "faction": "METROPOLIS",
+            "pos": [-2489.0, 4413.0]
+        },
+        {
+            "id": "portal",
+            "type": "portal",
+            "pos": [-1216.0001220703125, 2720.0],
+            "rotation": 90.0,
+            "enter_time_ms": 0.0,
+            "travel_time_ms": 0.0,
+            "portal_exit": "portal (3)",
+            "character_exit_impulse": {
+                "amount": 20000.0
+            },
+            "object_exit_impulse": {
+                "amount": 10818.5048828125,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (1)",
+            "type": "portal",
+            "pos": [-1208.0001220703125, 5871.99951171875],
+            "rotation": -90.0,
+            "enter_time_ms": 0.0,
+            "travel_time_ms": 0.0,
+            "portal_exit": "portal (2)",
+            "character_exit_impulse": {
+                "amount": 20000.0
+            },
+            "object_exit_impulse": {
+                "amount": 10818.5048828125,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (2)",
+            "type": "portal",
+            "pos": [1248.0, 2720.0],
+            "rotation": 90.0,
+            "color_preset": "YELLOW",
+            "enter_time_ms": 0.0,
+            "travel_time_ms": 0.0,
+            "portal_exit": "portal (1)",
+            "character_exit_impulse": {
+                "amount": 20000.0
+            },
+            "object_exit_impulse": {
+                "amount": 10818.5048828125,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (3)",
+            "type": "portal",
+            "pos": [1232.0001220703125, 5872.0],
+            "rotation": -90.0,
+            "color_preset": "YELLOW",
+            "enter_time_ms": 0.0,
+            "travel_time_ms": 0.0,
+            "portal_exit": "portal",
+            "character_exit_impulse": {
+                "amount": 20000.0
+            },
+            "object_exit_impulse": {
+                "amount": 10818.5048828125,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (4)",
+            "type": "portal",
+            "pos": [-3584.0, 6528.0],
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (5)",
+            "type": "portal",
+            "pos": [3584.0, 6528.0],
+            "rotation": -90.0,
+            "color_preset": "YELLOW",
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (6)",
+            "type": "portal",
+            "pos": [3584.0, 1664.0001220703125],
+            "rotation": -180.0,
+            "color_preset": "YELLOW",
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (7)",
+            "type": "portal",
+            "pos": [-3584.0, 1664.0],
+            "rotation": 90.0,
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (8)",
+            "type": "portal",
+            "pos": [3584.0, 4096.0],
+            "rotation": -90.0,
+            "color_preset": "YELLOW",
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "portal (11)",
+            "type": "portal",
+            "pos": [3584.0, 5760.0],
+            "rotation": -90.0,
+            "color_preset": "YELLOW",
+            "trampoline_like": true,
+            "character_exit_impulse": {
+                "amount": 20000.0,
+                "mode": "SET_VELOCITY"
+            }
+        },
+        {
+            "id": "nav_island",
+            "type": "nav_island",
+            "faction": "RESISTANCE",
+            "pos": [0.0, 3840.0],
+            "size": [9216, 7680]
+        },
+        {
+            "id": "minimap_marker",
+            "type": "portal",
+            "faction": "RESISTANCE",
+            "shape": "BOX",
+            "pos": [-640.0, 4096.0],
+            "size": [256, 1536],
+            "disable_all_entry_effects": true,
+            "reacts_to": {
+                "characters": false,
+                "character_weapons": false,
+                "bullets": false,
+                "flying_explosives": false,
+                "flying_melees": false,
+                "lying_items": false,
+                "shells": false,
+                "obstacles": false
+            }
+        },
+        {
+            "id": "bombsite",
+            "type": "bombsite",
+            "faction": "RESISTANCE",
+            "pos": [40.0, 1408.0],
+            "size": [4272, 256]
+        },
+        {
+            "id": "minimap_marker (1)",
+            "type": "portal",
+            "faction": "RESISTANCE",
+            "shape": "BOX",
+            "pos": [-512.0, 2688.0],
+            "size": [512, 256],
+            "disable_all_entry_effects": true,
+            "reacts_to": {
+                "characters": false,
+                "character_weapons": false,
+                "bullets": false,
+                "flying_explosives": false,
+                "flying_melees": false,
+                "lying_items": false,
+                "shells": false,
+                "obstacles": false
+            }
+        }
+    ]
+}

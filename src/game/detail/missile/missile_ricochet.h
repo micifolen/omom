@@ -1,0 +1,200 @@
+#pragma once
+
+template <class A, class B>
+static void ricochet_missile_against_surface(
+	const logic_step step,
+	const A& typed_missile,
+	const B& surface_handle,
+
+	const vec2& normal,
+	const vec2& collider_impact_velocity,
+	const vec2& point
+) {
+	auto& cosm = step.get_cosmos();
+	const auto& clk = cosm.get_clock();
+	const auto& now = clk.now;
+
+	RIC_LOG("(RIC)(%x) MISSILE %x WITH: %x", now.step, "CONTACT START", surface_handle);
+
+	const auto& missile_def = typed_missile.template get<invariants::missile>();
+	const auto ricochet_cooldown_ms = missile_def.ricochet_cooldown_ms;
+	(void)missile_def;
+	(void)ricochet_cooldown_ms;
+
+	auto& missile = typed_missile.template get<components::missile>();
+
+	const auto info = missile_surface_info(typed_missile, surface_handle, step.get_settings().friendly_fire);
+
+	if (missile.during_penetration) {
+		return;
+	}
+
+	if (!info.is_ricochetable()) {
+		RIC_LOG("non-ricochetable surface, IGNORED");
+		return;
+	}
+
+	/*
+		Bullets never ricochet off characters - a hit that would ricochet damages them instead.
+	*/
+	if (surface_handle.template has<components::sentience>()) {
+		RIC_LOG("sentient surface, IGNORED");
+		return;
+	}
+
+	/*
+		Only the first contact of a step can be a ricochet: within one step the physics solver
+		may already have bounced the bullet off it into further walls, with a velocity
+		that has nothing to do with how the bullet flew.
+		Contacts the bullet moves away from don't count - e.g. at a seam of a flat wall,
+		the tile it has flown past may come before the one it really hits.
+	*/
+	if (missile.when_last_ricochet_considered.was_set() && missile.when_last_ricochet_considered.step == now.step) {
+		return;
+	}
+
+	const auto collision_normal = vec2(normal).normalize();
+
+	const auto impact_velocity = collider_impact_velocity;
+	const auto impact_speed = impact_velocity.length();
+
+	/* Negated so that a NaN takes the safe branch. */
+	if (!(impact_speed > AUGS_EPSILON<real32>)) {
+		return;
+	}
+
+	const auto impact_dir = impact_velocity / impact_speed;
+	const auto impact_dot_normal = impact_dir.dot(collision_normal);
+
+	if (impact_dot_normal >= 0.f) {
+		RIC_LOG("dot normal is %x, IGNORED", impact_dot_normal);
+		return;
+	}
+
+	missile.when_last_ricochet_considered = now;
+
+	/* 
+		If the collision normal and velocity point in opposite directions,
+		check if ricochet happens.
+	*/
+
+	const auto hit_facing = impact_dir.degrees_between(collision_normal);
+
+	const auto& surface_fixtures = surface_handle.template get<invariants::fixtures>();
+	const auto max_ricochet_angle = surface_fixtures.max_ricochet_angle;
+
+	const auto left_b = 90 - max_ricochet_angle;
+	const auto right_b = 90 + max_ricochet_angle;
+
+	if (DEBUG_DRAWING.draw_forces) {
+		DEBUG_PERSISTENT_LINES.emplace_back(
+			yellow,
+			vec2(point),
+			vec2(point) + collision_normal * 150
+		);
+
+		DEBUG_PERSISTENT_LINES.emplace_back(
+			green,
+			vec2(point),
+			vec2(point) - impact_dir * 150
+		);
+	}
+
+	RIC_LOG_NVPS(left_b, hit_facing, right_b);
+
+	if (max_ricochet_angle >= 180 || (hit_facing > left_b && hit_facing < right_b)) {
+		{
+			const bool born_cooldown = clk.lasts(
+				missile_def.ricochet_born_cooldown_ms,
+				typed_missile.when_born()
+			);
+
+			if (!surface_fixtures.point_blank_ricochets && born_cooldown) {
+				RIC_LOG("Rico: born cooldown");
+				return;
+			}
+
+#if USER_RICOCHET_COOLDOWNS
+			const bool ricochet_cooldown = clk.lasts(
+				ricochet_cooldown_ms,
+				missile.when_last_ricocheted
+			);
+#else
+			const bool ricochet_cooldown = now.step <= missile.when_last_ricocheted.step + 1;
+#endif
+			if (ricochet_cooldown) {
+				RIC_LOG("Rico: rico cooldown");
+				return;
+			}
+
+			RIC_LOG("NO COOLDOWN, performing RICOCHET with %x, NOW: %x, impact dir: %x, coll normal: %x", surface_handle, now.step, impact_dir, collision_normal);
+		}
+
+		const auto angle = std::min(hit_facing - left_b, right_b - hit_facing);
+		const auto angle_mult = angle / max_ricochet_angle;
+
+		missile.when_last_ricocheted = now;
+
+		/*
+			Remembered so that only this very fixture is ignored during the cooldown -
+			any other one the bullet runs into right after is a genuine hit.
+		*/
+		missile.last_ricochet_surface = surface_handle.get_id();
+
+		if (const auto* const fixture = ::find_fixture_of_impact(surface_handle, cosm.get_si(), point)) {
+			missile.last_ricochet_convex_index = fixture->index_in_component;
+		}
+		else {
+			missile.last_ricochet_convex_index = -1;
+		}
+
+		/* Stamped by anything that puts the round onto a new heading, a portal included. */
+		missile.when_last_reoriented = now;
+
+		const auto reflected_dir = vec2(impact_dir).reflect(collision_normal);
+		const auto& rigid_body = typed_missile.template get<components::rigid_body>();
+
+		const auto target_position = rigid_body.get_transform().pos;
+		const auto new_transform = transformr(target_position, reflected_dir.degrees());
+
+		const auto new_velocity = reflected_dir * impact_speed;
+
+		RIC_LOG_NVPS(new_velocity);
+
+		rigid_body.set_velocity(new_velocity);
+		rigid_body.set_transform(new_transform);
+
+		const auto effect_transform = transformr(point, reflected_dir.degrees());
+		//::play_collision_sound(angle_mult * 150.f, effect_transform, typed_missile, surface_handle, step);
+
+		{
+			const auto& effect = missile_def.ricochet_particles;
+
+			effect.start(
+				step,
+				particle_effect_start_input::fire_and_forget(effect_transform),
+				always_predictable_v
+			);
+		}
+
+		{
+			const auto pitch = 0.7f + angle_mult / 1.5f;
+
+			auto effect = missile_def.ricochet_sound;
+			effect.modifier.pitch = pitch;
+
+			// TODO: PARAMETRIZE!
+			effect.modifier.max_distance = 3000.f;
+			effect.modifier.reference_distance = 1000.f;
+
+			effect.start(
+				step,
+				sound_effect_start_input::fire_and_forget(effect_transform),
+				always_predictable_v
+			);
+		}
+	}
+	else {
+		RIC_LOG("Not enough facing. IGNORED.");
+	}
+}

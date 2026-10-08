@@ -1,0 +1,1463 @@
+#include <algorithm>
+#include "augs/math/camera_cone.h"
+#include "augs/math/matrix.h"
+
+#include "augs/drawing/drawing.hpp"
+#include "augs/drawing/sprite_helpers.h"
+#include "augs/algorithm/sample_along_path.h"
+
+#include "augs/graphics/renderer.h"
+#include "augs/graphics/shader.h"
+
+#include "game/cosmos/entity_handle.h"
+#include "game/cosmos/cosmos.h"
+#include "game/cosmos/for_each_entity.h"
+#include "game/enums/filters.h"
+
+#include "view/frame_profiler.h"
+#include "view/rendering_scripts/draw_entity.h"
+
+#include "game/components/item_slot_transfers_component.h"
+#include "game/debug_drawing_settings.h"
+#include "game/detail/visible_entities.h"
+
+#include "game/components/interpolation_component.h"
+#include "game/components/fixtures_component.h"
+
+#include "game/detail/inventory/inventory_slot_handle.h"
+
+#include "view/rendering_scripts/rendering_scripts.h"
+#include "view/rendering_scripts/illuminated_rendering.h"
+#include "view/rendering_scripts/helper_drawer.h"
+#include "view/rendering_scripts/draw_area_indicator.h"
+
+#include "view/viewables/all_viewables_declaration.h"
+#include "view/viewables/image_in_atlas.h"
+#include "view/viewables/images_in_atlas_map.h"
+#include "game/stateless_systems/visibility_system.h"
+
+#include "view/audiovisual_state/audiovisual_state.h"
+
+#include "view/viewables/atlas_distributions.h"
+
+#include "view/rendering_scripts/illuminated_rendering.h"
+#include "game/detail/crosshair_math.hpp"
+
+#include "application/performance_settings.h"
+#include "augs/gui/text/printer.h"
+#include "augs/math/simple_calculations.h"
+#include "game/detail/sentience/callout_logic.h"
+#include "view/rendering_scripts/draw_offscreen_indicator.h"
+#include "game/detail/sentience/callout_logic.h"
+
+#include "augs/graphics/shader.hpp"
+#include "application/main/cached_visibility_data.h"
+#include "augs/templates/thread_pool.h"
+#include "game/detail/get_hovered_world_entity.h"
+
+#include "view/rendering_scripts/enqueue_illuminated_rendering_jobs.hpp"
+
+inline constexpr float OVERLAY_SMOKE_ALPHA = 0.084f;
+
+void illuminated_rendering(const illuminated_rendering_input in) {
+	using U = augs::common_uniform_name;
+	using D = augs::dedicated_buffer;
+	using DV = augs::dedicated_buffer_vector;
+
+	const auto& av = in.audiovisuals;
+	const auto& interp = av.get<interpolation_system>();
+
+	const auto viewed_character = in.camera.viewed_character;
+	const auto viewed_character_transform = viewed_character ? viewed_character.find_viewing_transform(interp) : std::optional<transformr>();
+	const auto& cosm = viewed_character.get_cosmos();
+	const auto& light_settings = cosm.get_common_significant().light;
+
+	const auto cone = in.camera.cone;
+	const auto screen_size = cone.screen_size;
+	
+	const auto& light = av.get<light_system>();
+	const auto& exploding_rings = av.get<exploding_ring_system>();
+	const auto& damage_indication = av.get<damage_indication_system>();
+	const auto& highlights = av.get<pure_color_highlight_system>();
+	const auto global_time_seconds = cosm.get_total_seconds_passed(in.interpolation_ratio);
+	const auto real_global_time_seconds = cosm.get_clock().get_real_seconds_passed(in.interpolation_ratio);
+	const auto settings = in.drawing;
+
+	const auto throw_trajectories = throw_trajectory_flags::from(settings);
+
+	const auto matrix = cone.get_projection_matrix();
+
+	const bool strict_fow = in.strict_fow_mode();
+
+	//const bool is_zoomed_out = cone.eye.zoom < 1.f;
+
+	const auto non_zoomed_matrix = [&]() {
+		auto non_zoomed_cone = cone;
+		non_zoomed_cone.eye.zoom = 1.f;
+		non_zoomed_cone.eye.transform.pos = vec2(screen_size) / 2;
+
+		return non_zoomed_cone.get_projection_matrix();
+	}();
+
+	const auto circular_bars_matrix = non_zoomed_matrix;
+
+	const auto& visible = in.all_visible;
+	const auto& shaders = in.shaders;
+	auto& fbos = in.fbos;
+	const auto& necessarys = in.necessary_images;
+	const auto& game_images = in.game_images;
+	const auto blank = necessarys.at(assets::necessary_image_id::BLANK);
+
+	const auto queried_cone = in.queried_cone;
+
+	auto& profiler = in.frame_performance;
+	auto& renderer = in.renderer;
+
+	/*
+		What strict fog of war hides is drawn only where the stencil marks the visible area.
+	*/
+
+	auto within_strict_fow = [&](auto&& draw) {
+		if (strict_fow) {
+			renderer.set_stencil(true);
+			renderer.stencil_positive_test();
+		}
+
+		draw();
+
+		if (strict_fow) {
+			renderer.set_stencil(false);
+		}
+	};
+
+	const auto considered_fow = in.get_considered_fow();
+
+	/* Shader manipulation lambdas */
+
+	auto set_uniform = [&](auto&& sh, auto&&... args) {
+		sh->set_uniform(renderer, std::forward<decltype(args)>(args)...);
+	};
+
+	auto set_shader = [&](auto& shader) {
+		shader->set_as_current(renderer);
+	};
+
+	auto set_shader_with_matrix = [&](auto& shader) {
+		set_shader(shader);
+		shader->set_projection(renderer, matrix);
+	};
+
+	auto set_shader_with_non_zoomed_matrix = [&](auto& shader) {
+		set_shader(shader);
+		shader->set_projection(renderer, non_zoomed_matrix);
+	};
+
+	auto set_shader_with_custom_matrix = [&](auto& shader, auto& custom_matrix) {
+		set_shader(shader);
+		shader->set_projection(renderer, custom_matrix);
+	};
+
+	auto bind_and_update_filtering = [&](auto& tex) {
+		const auto filtering = in.renderer_settings.default_filtering;
+
+		tex.set_as_current(renderer);
+		tex.set_filtering(renderer, filtering);
+	};
+
+	/* Output buffer getters */
+
+	auto get_drawer = [&]() {
+		return augs::drawer_with_default { renderer.get_triangle_buffer(), blank };
+	};
+
+	auto get_line_drawer = [&]() {
+		return augs::line_drawer_with_default{ renderer.get_line_buffer(), blank };
+	};
+
+	auto make_drawing_input = [&]() {
+		return draw_renderable_input { 
+			{
+				get_drawer(), 
+				game_images, 
+				global_time_seconds,
+				real_global_time_seconds,
+				flip_flags(),
+				av.randomizing,
+				queried_cone,
+				settings.bullet_trails != bullet_trails_mode::NONE,
+				interp.get_bullets_alpha()
+			},
+			interp
+		};
+	};
+
+	/* Drawing lambdas */
+
+	auto draw_particles = [&](const particle_layer layer) {
+		renderer.call_triangles_direct_ptr(in.drawn_particles.diffuse[layer]);
+	};
+
+	auto draw_particles_neons = [&]() {
+#if 0
+		if (strict_fow) {
+			renderer.set_stencil(true);
+			renderer.stencil_positive_test();
+		}
+#endif
+
+		renderer.call_triangles_direct_ptr(in.drawn_particles.neons);
+
+#if 0
+		if (strict_fow) {
+			renderer.set_stencil(false);
+		}
+#endif
+	};
+
+#if BUILD_STENCIL_BUFFER
+	const bool fog_of_war_effective = 
+		viewed_character_transform.has_value() 
+		&& considered_fow.is_enabled()
+	;
+#else
+	const bool fog_of_war_effective = false;
+#endif
+
+	auto write_fow_to_stencil = [&]() {
+		if (viewed_character.dead()) {
+			return;
+		}
+
+		renderer.set_stencil(true);
+
+		renderer.start_writing_stencil();
+		renderer.set_clear_color(rgba(0, 0, 0, 0));
+		renderer.clear_stencil();
+
+		const auto eye_pos = viewed_character_transform->pos;
+
+		set_shader_with_matrix(shaders.fog_of_war);
+
+		auto dir = calc_crosshair_displacement(viewed_character) + in.pre_step_crosshair_displacement;
+
+		if (dir.is_zero()) {
+			dir.set(1, 0);
+		}
+
+		const auto& angle = considered_fow.angle;
+		const auto left_dir = vec2(dir).rotate(-angle / 2).neg_y();
+		const auto right_dir = vec2(dir).rotate(angle / 2).neg_y();
+
+		const auto eye_frag_pos = [&]() {
+			auto screen_space = cone.to_screen_space(eye_pos);	
+			screen_space.y = screen_size.y - screen_space.y;
+			return screen_space;
+		}();
+
+		set_uniform(shaders.fog_of_war, U::startingAngleVec, left_dir);
+		set_uniform(shaders.fog_of_war, U::endingAngleVec, right_dir);
+		set_uniform(shaders.fog_of_war, U::eye_frag_pos, eye_frag_pos);
+
+		renderer.call_triangles(D::FOG_OF_WAR);
+
+		renderer.finish_writing_stencil();
+		renderer.set_stencil(false);
+	};
+
+	auto draw_sentience_borders = [&]() {
+		if (fog_of_war_effective) {
+			renderer.set_stencil(true);
+			renderer.stencil_positive_test();
+
+			renderer.call_triangles(D::BORDERS_ENEMY_SENTIENCES);
+			renderer.set_stencil(false);
+
+			renderer.call_triangles(D::OCCLUDED_ENEMY_HIGHLIGHTS);
+			renderer.call_triangles(D::BORDERS_FRIENDLY_SENTIENCES);
+		}
+		else {
+			renderer.call_triangles(D::BORDERS_FRIENDLY_SENTIENCES);
+		}
+
+		renderer.call_and_clear_triangles();
+	};
+
+	auto draw_sentiences = [&](auto& shader) {
+		if (fog_of_war_effective) {
+			renderer.stencil_positive_test();
+
+			set_shader(shader);
+
+			renderer.set_stencil(true);
+			renderer.call_triangles(D::ENEMY_SENTIENCES);
+			renderer.set_stencil(false);
+
+			renderer.call_triangles(D::FRIENDLY_SENTIENCES);
+		}
+		else {
+			renderer.call_triangles(D::FRIENDLY_SENTIENCES);
+		}
+	};
+
+	auto draw_sentience_HUDs = [&]() {
+		if (settings.cinematic_mode) {
+			return;
+		}
+
+		set_shader_with_custom_matrix(shaders.circular_bars, circular_bars_matrix);
+
+		const auto set_center_uniform = [&](const auto& tex_id) {
+			set_uniform(shaders.circular_bars, U::texture_center, necessarys[tex_id].get_center());
+		};
+
+		if (viewed_character) {
+			std::array<assets::necessary_image_id, 3> circles = {
+				assets::necessary_image_id::CIRCULAR_BAR_LARGE,
+				assets::necessary_image_id::CIRCULAR_BAR_UNDER_LARGE,
+				assets::necessary_image_id::CIRCULAR_BAR_UNDER_UNDER_LARGE
+			};
+
+			int current_circle = 0;
+
+			if (settings.draw_hp_bar) {
+				set_center_uniform(circles[current_circle++]);
+				renderer.call_triangles(DV::SENTIENCE_HUDS, 0);
+			}
+
+			if (settings.draw_pe_bar) {
+				set_center_uniform(circles[current_circle++]);
+				renderer.call_triangles(DV::SENTIENCE_HUDS, 1);
+			}
+
+			if (settings.draw_cp_bar) {
+				set_center_uniform(circles[current_circle++]);
+				renderer.call_triangles(DV::SENTIENCE_HUDS, 2);
+			}
+		}
+
+		{
+			int current_hud = 0;
+
+			auto draw_explosives_hud = [&](const auto tex_id) {
+				set_center_uniform(tex_id);
+				renderer.call_triangles(DV::EXPLOSIVE_HUDS, current_hud++);
+			};
+
+			draw_explosives_hud(assets::necessary_image_id::CIRCULAR_BAR_SMALL);
+			draw_explosives_hud(assets::necessary_image_id::CIRCULAR_BAR_MEDIUM);
+			draw_explosives_hud(assets::necessary_image_id::CIRCULAR_BAR_OVER_MEDIUM);
+		}
+	};
+
+	auto draw_fog_of_war_overlay = [&]() {
+		if (!fog_of_war_effective) {
+			return;
+		}
+
+		const auto& appearance = settings.fog_of_war_appearance;
+
+		renderer.call_and_clear_triangles();
+		renderer.set_stencil(true);
+
+		if (appearance.overlay_color_on_visible) {
+			renderer.stencil_positive_test();
+		}
+		else {
+			renderer.stencil_reverse_test();
+		}
+
+		set_shader_with_matrix(shaders.pure_color_highlight);
+
+		const auto fow_size = considered_fow.get_real_size();
+
+		get_drawer().aabb(
+			ltrb::center_and_size(viewed_character_transform->pos, fow_size),
+			appearance.overlay_color
+		);
+
+		renderer.call_and_clear_triangles();
+		renderer.set_stencil(false);
+	};
+
+	auto draw_interaction_sensor = [&]() {
+		if (!viewed_character || settings.cinematic_mode) {
+			return;
+		}
+
+		if (const auto sentience = viewed_character.find<components::sentience>()) {
+			if (const auto sentience_def = viewed_character.find<invariants::sentience>()) {
+				if (sentience->is_requesting_any_interaction()) {
+					if (const auto tr = viewed_character.find_viewing_transform(interp)) {
+						auto col = gray;
+
+						switch (sentience->last_interaction_result) {
+							case interaction_result_type::IN_RANGE_BUT_CANT:
+								col = yellow;
+								break;
+							case interaction_result_type::CAN_BEGIN:
+							case interaction_result_type::IN_PROGRESS:
+								col = green;
+								break;
+							default:
+								break;
+						}
+
+						const auto& a = sentience_def->interaction_hitbox_range;
+						const auto& r = sentience_def->interaction_hitbox_radius;
+
+						if (r > 0.f) {
+							const auto& p = tr->pos;
+							const auto dash_len = 5.f;
+
+							get_line_drawer().dashed_circular_sector(
+								p,
+								r,
+								col,
+								tr->rotation,
+								a,
+								dash_len
+							);
+						}
+					}
+				}
+			}
+		}
+	};
+
+	auto draw_area_markers = [&]() {
+		const auto& markers = settings.draw_area_markers;
+
+		if (!markers.is_enabled) {
+			return;
+		}
+
+		visible.for_each<render_layer::AREA_MARKERS, render_layer::AREA_SENSORS>(cosm, [&](const auto e) {
+			e.template dispatch_on_having_all<invariants::area_marker>([&](const auto typed_handle) { 
+				const auto where = typed_handle.get_logic_transform();
+				const auto& marker_alpha = markers.value;
+				::draw_area_indicator(typed_handle, get_line_drawer(), where, marker_alpha, drawn_indicator_type::INGAME, 1.0f);
+			});
+		});
+	};
+
+	auto draw_crosshairs = [&]() {
+		if (!settings.draw_crosshairs) {
+			return;
+		}
+
+		auto draw_crosshair = [&](const auto it) {
+			//const vec2 screen_space_pos = screen_size / 2 + ::calc_crosshair_displacement(it) + in.pre_step_crosshair_displacement;
+			//LOG_NVPS(screen_space_pos.x, screen_space_pos.y, screen_size.x);
+
+			const vec2 world_space_pos = it.get_world_crosshair_transform(interp, false).pos + in.pre_step_crosshair_displacement;
+
+			/* Round to whole pixels so the crosshair stays crisp under fractional camera zooms. */
+			const vec2 projection_space_pos = vec2(cone.to_screen_space(world_space_pos)).round_fract();
+
+			float recoil_amount = 0.0f;
+
+			if (it.alive()) {
+				if (auto crosshair = it.template find<components::crosshair>()) {
+					recoil_amount = std::abs(crosshair->recoil.rotation);
+				}
+
+				if (it.get_wielded_guns().empty() && !it.get_wielded_melees().empty()) {
+					recoil_amount *= 0.5f;
+				}
+			}
+
+			if (settings.crosshair.type == crosshair_type::CIRCULAR) {
+				::draw_crosshair_circular(
+					settings.crosshair,
+					get_drawer(),
+					renderer.get_special_buffer(),
+					projection_space_pos,
+					screen_size,
+					recoil_amount
+				);
+			}
+			else {
+				::draw_crosshair_procedurally(settings.crosshair, get_drawer(), projection_space_pos, recoil_amount);
+			}
+		};
+
+		auto draw_crosshair_full = [&](const auto it) {
+			renderer.call_and_clear_triangles();
+
+			if (settings.crosshair.type == crosshair_type::CIRCULAR) {
+				shaders.exploding_rings->set_as_current(renderer);
+				shaders.exploding_rings->set_projection(renderer, non_zoomed_matrix);
+			}
+			else {
+				shaders.standard->set_projection(renderer, non_zoomed_matrix);
+			}
+
+			draw_crosshair(it);
+
+			if (settings.crosshair.type == crosshair_type::CIRCULAR) {
+				renderer.call_and_clear_triangles();
+
+				shaders.standard->set_as_current(renderer);
+				shaders.standard->set_projection(renderer, non_zoomed_matrix);
+
+				if (settings.crosshair.show_dot) {
+					const vec2 world_space_pos = it.get_world_crosshair_transform(interp, false).pos + in.pre_step_crosshair_displacement;
+					const vec2 projection_space_pos = vec2(cone.to_screen_space(world_space_pos)).round_fract();
+
+					const auto dot_size = vec2::square(settings.crosshair.dot_size * settings.crosshair.scale);
+					const auto dot_origin = ltrb::center_and_size(projection_space_pos, dot_size);
+
+					auto borders = border_input();
+					borders.width = settings.crosshair.border_width;
+
+					get_drawer().aabb_with_border(dot_origin, settings.crosshair.inside_color, settings.crosshair.border_color, borders);
+				}
+			}
+
+			renderer.call_and_clear_triangles();
+			shaders.standard->set_projection(renderer, matrix);
+		};
+
+		if (viewed_character) {
+			draw_crosshair_full(viewed_character);
+		}
+
+		if (in.draw_enemy_crosshairs) {
+			visible.for_each<render_layer::SENTIENCES>(cosm, [&](const auto& handle) {
+				handle.template dispatch_on_having_all<components::sentience>([&](const auto& typed_handle) {
+					if (typed_handle == viewed_character) {
+						return;
+					}
+
+					draw_crosshair_full(typed_handle);
+				});
+			});
+		}
+	};
+
+	/*
+		Silhouettes of the held grenades and melee weapons along their simulated trajectories - see throw_trajectory_system.
+		Drawn in flat colors with a 1px black border, like the weapons of knockout indicators,
+		over a still white dashed line through the item and its silhouettes.
+		They are rotated as they would be at that point, and the silhouette where the throw really ends
+		pulses in size and towards white on top of everything else - spinning in place if it is an explosive.
+
+		All of it is translucent by game_drawing_settings::throw_trajectory_alpha - the end silhouette by its own throw_trajectory_end_alpha -
+		so it is drawn from the top down with every pixel drawn at most once -
+		the borders and the lines never show through the silhouettes over them.
+	*/
+
+	auto draw_throw_trajectories = [&]() {
+		const auto& trajectories = av.get<throw_trajectory_system>().get_trajectories();
+
+		if (trajectories.empty()) {
+			return;
+		}
+
+		constexpr auto explosive_spin_degrees_per_sec = 360.0;
+		constexpr auto end_pulses_per_sec = 2.0;
+		constexpr auto end_min_size_mult = 1.5f;
+		constexpr auto end_max_size_mult = 2.f;
+		constexpr auto dash_length = 10.f;
+
+		const auto alpha = std::clamp(settings.throw_trajectory_alpha, 0.f, 1.f);
+		const auto end_alpha = std::clamp(settings.throw_trajectory_end_alpha, 0.f, 1.f);
+		const auto ratio = static_cast<real32>(in.interpolation_ratio);
+		const auto spin = static_cast<real32>(std::fmod(real_global_time_seconds * explosive_spin_degrees_per_sec, 360.0));
+		const auto pulse = static_cast<real32>(0.5 - 0.5 * std::cos(real_global_time_seconds * end_pulses_per_sec * 2.0 * PI<double>));
+
+		auto translucent = [](rgba col, const real32 a) {
+			return col.mult_alpha(a);
+		};
+
+		auto calc_alpha = [&](const throw_silhouette_type type) {
+			return type == throw_silhouette_type::END ? end_alpha : alpha;
+		};
+
+		const auto border = 1.f / cone.eye.zoom;
+
+		const vec2 border_offsets[4] = {
+			vec2(-border, 0), vec2(border, 0), vec2(0, -border), vec2(0, border)
+		};
+
+		/*
+			A melee weapon stopping at an enemy is red to the end, at a friend green.
+		*/
+
+		auto calc_color = [&](const throw_silhouette_type type, const throw_end_type end_type) {
+			const auto end_color = [&]() {
+				switch (end_type) {
+					case throw_end_type::ENEMY: return red;
+					case throw_end_type::FRIEND: return green;
+					default: return cyan;
+				}
+			}();
+
+			const auto blocked_color = end_type == throw_end_type::FRIEND ? green : red;
+
+			switch (type) {
+				case throw_silhouette_type::BLOCKED: return translucent(blocked_color, alpha);
+				case throw_silhouette_type::END: return translucent(augs::interp(end_color, white, pulse), end_alpha);
+				default: return translucent(white, alpha);
+			}
+		};
+
+		auto calc_size_mult = [&](const throw_silhouette_type type) {
+			return type == throw_silhouette_type::END ? augs::interp(end_min_size_mult, end_max_size_mult, pulse) : 1.f;
+		};
+
+		auto draw_silhouettes = [&]() {
+			auto& output = renderer.get_triangle_buffer();
+
+			for (const auto& trajectory : reverse(trajectories)) {
+				const auto& entry = game_images.find_or(trajectory.image).diffuse;
+
+				for (const auto& silhouette : reverse(trajectory.silhouettes)) {
+					const auto type = silhouette.type;
+					const auto interpolated = silhouette.get_interpolated(ratio);
+					const auto size = vec2i(vec2(trajectory.size) * calc_size_mult(type));
+
+					const bool spins = trajectory.input.explosive && type == throw_silhouette_type::END;
+					const auto rotation = interpolated.rotation + (spins ? spin : 0.f);
+
+					augs::detail_sprite(output, entry, size, interpolated.pos, rotation, calc_color(type, trajectory.end_type));
+
+					for (const auto& o : border_offsets) {
+						augs::detail_sprite(output, entry, size, interpolated.pos + o, rotation, translucent(black, calc_alpha(type)));
+					}
+				}
+			}
+
+			renderer.call_and_clear_triangles();
+		};
+
+		/*
+			Dashes in screen space, so that they keep their on-screen size regardless of zoom, like the laser.
+		*/
+
+		auto draw_dashed_lines = [&]() {
+			thread_local std::vector<transformr> points;
+			thread_local std::vector<std::pair<vec2, vec2>> dashes;
+
+			dashes.clear();
+
+			for (const auto& trajectory : trajectories) {
+				const auto item = cosm[trajectory.input.item];
+
+				if (item.dead()) {
+					continue;
+				}
+
+				points.clear();
+				points.push_back(transformr(vec2(cone.to_screen_space(item.get_viewing_transform(interp).pos)), 0.f));
+
+				for (const auto& silhouette : trajectory.silhouettes) {
+					if (silhouette.type != throw_silhouette_type::BLOCKED) {
+						points.push_back(transformr(vec2(cone.to_screen_space(silhouette.get_interpolated(ratio).pos)), 0.f));
+					}
+				}
+
+				std::optional<vec2> dash_start;
+
+				augs::sample_along_path(
+					points,
+					dash_length,
+					0.f,
+					std::numeric_limits<real32>::max(),
+					[](const transformr& a, const transformr& b, const real32 t) { return a.interp(b, t); },
+					[&](const transformr& t, real32) {
+						if (dash_start.has_value()) {
+							dashes.emplace_back(*dash_start, t.pos);
+							dash_start = std::nullopt;
+						}
+						else {
+							dash_start = t.pos;
+						}
+					}
+				);
+			}
+
+			const auto line_drawer = get_line_drawer();
+			const auto laser = necessarys.at(assets::necessary_image_id::LASER);
+
+			for (const auto& d : dashes) {
+				line_drawer.line(laser, d.first, d.second, translucent(white, alpha));
+			}
+
+			for (const auto& d : dashes) {
+				for (const auto& o : border_offsets) {
+					const auto screen_offset = o * cone.eye.zoom;
+					line_drawer.line(laser, d.first + screen_offset, d.second + screen_offset, translucent(black, alpha));
+				}
+			}
+
+			renderer.call_and_clear_lines();
+		};
+
+		renderer.call_and_clear_triangles();
+		renderer.call_and_clear_lines();
+
+#if BUILD_STENCIL_BUFFER
+		renderer.set_stencil(true);
+		renderer.clear_single_coverage();
+		renderer.start_single_coverage();
+#endif
+
+		/*
+			Flat colors need the shadow sprite shader - without it, only the dashed lines are drawn.
+		*/
+
+		if (shaders.shadow_sprite) {
+			set_shader_with_matrix(shaders.shadow_sprite);
+			draw_silhouettes();
+		}
+
+		set_shader_with_non_zoomed_matrix(shaders.standard);
+		draw_dashed_lines();
+
+#if BUILD_STENCIL_BUFFER
+		renderer.finish_single_coverage();
+		renderer.set_stencil(false);
+#endif
+
+		set_shader_with_matrix(shaders.standard);
+	};
+
+	auto draw_weapon_laser = [&]() {
+		if (settings.draw_weapon_laser && viewed_character.alive()) {
+			const auto laser = necessarys.at(assets::necessary_image_id::LASER);
+
+			/*
+				The laser is drawn in screen space under the non-zoomed
+				projection - as if the camera zoom was always 1.0 - so its
+				thickness, dashes, stitches and borders keep the same
+				on-screen size regardless of the current camera zoom.
+			*/
+
+			auto in_screen_space = [&](auto base) {
+				return [base, this_cone = cone](const vec2 from, const vec2 to, const rgba col) {
+					base(
+						vec2(this_cone.to_screen_space(from)),
+						vec2(this_cone.to_screen_space(to)),
+						col
+					);
+				};
+			};
+
+			/*
+				Every line is first drawn in black with 1px offsets
+				in the four directions, then in its color on top -
+				a 1px border keeping the laser readable on bright
+				backgrounds.
+			*/
+			auto with_border = [](auto base) {
+				return [base](const vec2 from, const vec2 to, const rgba col) {
+					const vec2 offsets[4] = {
+						vec2(-1, 0), vec2(1, 0), vec2(0, -1), vec2(0, 1)
+					};
+
+					for (const auto& o : offsets) {
+						base(from + o, to + o, black);
+					}
+
+					base(from, to, col);
+				};
+			};
+
+			/*
+				Perpendicular ticks ("stitches") instead of longitudinal
+				dashes, so the through-material part cannot be confused
+				with the dead path past the bullet's death point.
+			*/
+			auto as_stitches = [](auto base) {
+				return [base](const vec2 from, const vec2 to, const rgba col) {
+					const auto delta = to - from;
+					const auto len = delta.length();
+
+					if (len <= 0.0f) {
+						return;
+					}
+
+					const auto dir = delta / len;
+					const auto tick_offset = dir.perpendicular_cw() * 4.0f;
+
+					const auto tick_spacing = 7.0f;
+
+					for (float d = 0.0f; d <= len; d += tick_spacing) {
+						const auto center = from + dir * d;
+
+						base(center - tick_offset, center + tick_offset, col);
+					}
+				};
+			};
+
+			renderer.call_and_clear_lines();
+			shaders.standard->set_projection(renderer, non_zoomed_matrix);
+
+			draw_crosshair_lasers({
+				in_screen_space(with_border(line_output_wrapper { get_line_drawer(), laser })),
+				in_screen_space(with_border(dashed_line_output_wrapper { get_line_drawer(), laser, 10.f, 40.f, real_global_time_seconds })),
+				in_screen_space(as_stitches(with_border(line_output_wrapper { get_line_drawer(), laser }))),
+				interp,
+				viewed_character,
+				in.pre_step_crosshair_displacement,
+				screen_size,
+				cone.get_visible_world_rect_aabb(),
+				throw_trajectories
+			});
+
+			renderer.call_and_clear_lines();
+			shaders.standard->set_projection(renderer, matrix);
+		}
+
+		if (throw_trajectories.any() && viewed_character.alive()) {
+			draw_throw_trajectories();
+		}
+	};
+
+	auto draw_pure_color_highlights = [&]() {
+		set_shader(shaders.pure_color_highlight);
+
+		auto drawing_input = make_drawing_input();
+		highlights.draw_highlights(cosm, drawing_input);
+
+		for (const auto& h : in.additional_highlights) {
+			draw_color_highlight(cosm[h.id], h.col, drawing_input);
+		}
+
+		renderer.call_and_clear_triangles();
+	};
+
+	auto neon_occlusion_callback = [&](bool is_foreground) {
+		auto& shader = shaders.neon_occluder;
+
+		set_shader_with_matrix(shader);
+
+		const auto& ambient_color = light_settings.ambient_color;
+		set_uniform(shader, U::global_color, ambient_color);
+
+		if (!is_foreground) {
+			if (settings.occlude_neons_under_sentiences) {
+				draw_sentiences(shader);
+			}
+		}
+	};
+
+	/*
+		Legacy lights that Brighten lights band all light already, neons included.
+	*/
+
+	const bool quantize_neons = 
+		in.perf_settings.quantize_neons
+		&& !(light_settings.brighten_lights && !light_settings.physical_lights)
+	;
+
+	auto light_pass = [&]() {
+		const auto cast_highlight = necessarys.at(assets::necessary_image_id::CAST_HIGHLIGHT);
+
+		const auto light_input = light_system_input {
+			renderer,
+			profiler,
+			cosm, 
+			matrix,
+			fbos.light.value(),
+			fbos.removed_light.has_value() ? std::addressof(fbos.removed_light.value()) : nullptr,
+			fbos.hue_light.has_value() ? std::addressof(fbos.hue_light.value()) : nullptr,
+			*shaders.light, 
+			*shaders.textured_light, 
+			*shaders.standard, 
+			quantize_neons && shaders.posterized_neon ? std::addressof(*shaders.posterized_neon) : nullptr,
+			neon_occlusion_callback,
+			[&]() {
+				draw_particles_neons();
+
+				if (viewed_character) {
+					const auto laser_glow = necessarys.at(assets::necessary_image_id::LASER_GLOW);
+					const auto glow_edge_tex = necessarys.at(assets::necessary_image_id::LASER_GLOW_EDGE);
+
+					draw_crosshair_lasers({
+						[&](const vec2 from, const vec2 to, rgba col) {
+							if (!settings.draw_weapon_laser) {
+								return;
+							}
+
+							col.mult_alpha(0.5f);
+
+							const vec2 edge_size = static_cast<vec2>(glow_edge_tex.get_original_size());
+
+							get_drawer().line(laser_glow, from, to, edge_size.y / 5.f, col);
+
+							const auto edge_dir = (to - from).normalize();
+							const auto edge_offset = edge_dir * edge_size.x;
+
+							get_drawer().line(glow_edge_tex, to, to + edge_offset, edge_size.y / 3.f, col);
+							get_drawer().line(glow_edge_tex, from - edge_offset + edge_dir, from + edge_dir, edge_size.y / 5.f, col, flip_flags::make_horizontally());
+						},
+						[](const vec2, const vec2, const rgba) {},
+						[](const vec2, const vec2, const rgba) {},
+						interp,
+						viewed_character,
+						in.pre_step_crosshair_displacement,
+						screen_size,
+						cone.get_visible_world_rect_aabb(),
+						throw_trajectories
+					});
+				}
+
+				const auto& explosions = in.perf_settings.special_effects.explosions;
+
+				draw_explosion_body_highlights({
+					get_drawer(),
+					queried_cone,
+					interp,
+					cosm,
+					global_time_seconds,
+					cast_highlight,
+					explosions.fire_particles.light_brightness_mult,
+					explosions.standard_particles.light_brightness_mult
+				});
+
+				draw_beep_lights({
+					get_drawer(),
+					interp,
+					cosm,
+					cast_highlight
+				})();
+
+				set_shader(shaders.illuminating_smoke);
+
+				within_strict_fow([&]() {
+					renderer.set_active_texture(3);
+					bind_and_update_filtering(fbos.illuminating_smoke->get_texture());
+					renderer.set_active_texture(0);
+
+					set_uniform(shaders.illuminating_smoke, U::smoke_flat_intensity, 0.0f);
+					renderer.fullscreen_quad();
+				});
+
+				set_shader(shaders.standard);
+
+				exploding_rings.draw_highlights_of_explosions(
+					get_drawer(),
+					cast_highlight,
+					queried_cone
+				);
+
+				exploding_rings.draw_highlights_of_continuous_rings(
+					cosm,
+					get_drawer(),
+					cast_highlight,
+					queried_cone
+				);
+			},
+			write_fow_to_stencil,
+			cone,
+			fog_of_war_effective ? viewed_character : std::optional<entity_id>(),
+			in.queried_cone,
+			visible,
+			cast_highlight,
+			make_drawing_input,
+			in.perf_settings,
+			in.light_requests,
+			strict_fow,
+			in.general_atlas,
+			in.renderer_settings.default_filtering
+		};
+
+		light.render_all_lights(light_input);
+	};
+
+	auto overlay_smoke_texture = [&]() {
+		renderer.set_active_texture(1);
+		bind_and_update_filtering(fbos.smoke->get_texture());
+		renderer.set_active_texture(0);
+
+		set_shader(shaders.smoke);
+
+		within_strict_fow([&]() {
+			renderer.fullscreen_quad();
+		});
+	};
+
+	/* Flow */
+
+	if (in.general_atlas) {
+		bind_and_update_filtering(*in.general_atlas);
+	}
+
+	augs::graphics::fbo::mark_current(in.renderer);
+
+	set_shader_with_matrix(shaders.standard);
+
+	fbos.smoke->set_as_current(renderer);
+
+	renderer.clear_current_fbo();
+	renderer.set_additive_blending();
+
+	draw_particles(particle_layer::DIM_SMOKES);
+	draw_particles(particle_layer::ILLUMINATING_SMOKES);
+
+	renderer.call_and_clear_triangles();
+
+	fbos.illuminating_smoke->set_as_current(renderer);
+	renderer.clear_current_fbo();
+
+	draw_particles(particle_layer::ILLUMINATING_SMOKES);
+
+	renderer.call_and_clear_triangles();
+
+	fbos.overlay_smoke->set_as_current(renderer);
+	renderer.clear_current_fbo();
+
+	draw_particles(particle_layer::OVERLAY_SMOKES);
+
+	renderer.call_and_clear_triangles();
+
+	const auto environment_shadow_strength = in.get_environment_shadow_strength();
+	const bool environment_shadows = environment_shadow_strength > 0.0f;
+
+	if (environment_shadows) {
+		/*
+			Max blending keeps the tallest height and the strongest shadow in each pixel,
+			so overlapping fading shadows don't leave seams.
+			Footprints only raise the blue channel.
+		*/
+
+		const auto shadow_layout = ::calc_sun_shadow_texture_layout(
+			cone.get_visible_world_rect_aabb(),
+			cone.eye.zoom,
+			light_settings.sun_shadows.step
+		);
+
+		const auto shadow_matrix = augs::orthographic_projection(shadow_layout.world_rect);
+
+		fbos.shadow->set_as_current(renderer);
+		renderer.set_viewport({ vec2i::zero, vec2i(fbos.shadow->get_size()) });
+		renderer.clear_current_fbo();
+
+		shaders.standard->set_projection(renderer, shadow_matrix);
+
+		renderer.set_max_blending();
+		renderer.call_triangles(D::SHADOW_CASTS);
+		renderer.call_triangles(D::SHADOW_FOOTPRINTS);
+
+		if (shaders.shadow_sprite) {
+			set_shader(shaders.shadow_sprite);
+			shaders.shadow_sprite->set_projection(renderer, shadow_matrix);
+			set_uniform(shaders.shadow_sprite, U::color_encodes_footprints, 1);
+			renderer.call_triangles(D::SHADOW_SPRITES);
+			set_uniform(shaders.shadow_sprite, U::color_encodes_footprints, 0);
+			set_shader(shaders.standard);
+		}
+
+		shaders.standard->set_projection(renderer, matrix);
+		renderer.set_viewport({ vec2i::zero, screen_size });
+
+		shaders.illuminated->set_as_current(renderer);
+		shaders.illuminated->set_uniform(renderer, U::shadow_texture_offset, shadow_layout.texel_offset);
+		set_shader(shaders.standard);
+	}
+	
+	renderer.set_standard_blending();
+
+	augs::graphics::fbo::set_current_to_marked(in.renderer);
+
+	if (environment_shadows) {
+		renderer.set_active_texture(4);
+		fbos.shadow->get_texture().set_as_current(renderer);
+		renderer.set_active_texture(0);
+	}
+
+	auto setup_shadow_uniforms = [&](auto& shader) {
+		if (!environment_shadows) {
+			return;
+		}
+
+		/*
+			The shader walks in fragment space where the y axis points up.
+		*/
+
+		const auto fragment_step = vec2(light_settings.sun_shadows.step.x, -light_settings.sun_shadows.step.y) * cone.eye.zoom;
+		const auto fix_samples = in.perf_settings.sun_shadows.quality == shadow_quality_type::NORMAL ? 1 : 0;
+
+		set_uniform(shader, U::shadow_step, fragment_step);
+		set_uniform(shader, U::shadow_fix, fix_samples);
+		set_uniform(shader, U::ambient_color, light_settings.ambient_color);
+		set_uniform(shader, U::shadow_hue_preservation, light_settings.sun_shadows.hue_preservation);
+	};
+
+	/*
+		The light of every pixel computed once, for the receivers reading their height from the shadow texture -
+		the ground overlaps itself many times. Without environment shadows it holds for every receiver.
+		See light_resolve in illuminated.fsh.
+	*/
+
+	bool light_resolved = false;
+
+	auto use_resolved_light = [&](const bool use) {
+		set_uniform(shaders.illuminated, U::light_resolve, light_resolved && use ? 2 : 0);
+	};
+
+	auto resolve_light = [&]() {
+		if (!fbos.resolved_light.has_value()) {
+			return;
+		}
+
+		/*
+			Anything still queued would be flushed into the resolved light along with the quad.
+		*/
+
+		ensure_eq(static_cast<std::size_t>(0), renderer.get_triangle_count());
+
+		fbos.resolved_light->set_as_current(renderer);
+		renderer.set_overwriting_blending();
+		set_uniform(shaders.illuminated, U::light_resolve, 1);
+
+		/*
+			The shader reads only gl_FragCoord, so the quad just has to cover every pixel -
+			the margin is for the rounding of the camera's position and zoom.
+		*/
+
+		auto whole_screen = cone.get_visible_world_rect_aabb();
+		whole_screen.expand_from_center(vec2::square(8.0f));
+
+		get_drawer().aabb(whole_screen, white);
+		renderer.call_and_clear_triangles();
+
+		renderer.set_standard_blending();
+		augs::graphics::fbo::set_current_to_marked(in.renderer);
+
+		renderer.set_active_texture(8);
+		fbos.resolved_light->get_texture().set_as_current(renderer);
+		renderer.set_active_texture(0);
+
+		light_resolved = true;
+		use_resolved_light(true);
+	};
+
+	auto receive_shadows = [&](auto& shader, const bool receive, const float receiver_height = -1.0f) {
+		use_resolved_light(!environment_shadows || (receive && receiver_height < 0.0f));
+
+		if (!environment_shadows) {
+			/*
+				The shadow texture is not redrawn this frame - it must not show from an earlier one.
+			*/
+			set_uniform(shader, U::shadow_strength, 0.0f);
+			return;
+		}
+
+		set_uniform(shader, U::shadow_strength, receive ? environment_shadow_strength : 0.0f);
+		set_uniform(shader, U::receiver_height, receiver_height);
+	};
+
+	if (settings.stencil_before_light_pass) {
+		if (fog_of_war_effective) {
+			renderer.call_and_clear_triangles();
+			write_fow_to_stencil();
+		}
+
+		light_pass();
+	}
+	else {
+		renderer.call_and_clear_triangles();
+
+		light_pass();
+
+		if (fog_of_war_effective) {
+			write_fow_to_stencil();
+		}
+	}
+
+	set_shader_with_matrix(shaders.illuminated);
+	const auto brighten_mode = [&]() {
+		if (!light_settings.brighten_lights) {
+			return 0;
+		}
+
+		return light_settings.physical_lights ? 1 : 2;
+	}();
+
+	set_uniform(shaders.illuminated, U::brighten_lights, brighten_mode);
+
+
+	set_uniform(
+		shaders.illuminated,
+		U::point_light_hue_preservation,
+		fbos.hue_light.has_value() ? light_settings.point_light_shadows.hue_preservation : 0.0f
+	);
+	setup_shadow_uniforms(shaders.illuminated);
+	receive_shadows(shaders.illuminated, true);
+	resolve_light();
+
+	renderer.call_triangles(D::GROUND);
+
+	/*
+		Ground decals (blood splatters) with full illumination - so they read clearly anywhere, sun shadows included.
+	*/
+
+	set_shader(shaders.standard);
+	renderer.call_triangles(D::GROUND_DECALS);
+
+	set_shader_with_matrix(shaders.illuminated);
+	renderer.call_triangles(D::LYING_CORPSES);
+
+	/*
+		Ground sprites casting shadows, above decals and corpses.
+		Their footprints in the shadow texture keep them from receiving their own shadows,
+		and only decide which shadows reach them - the shadows aren't displaced by their small heights.
+	*/
+
+	set_uniform(shaders.illuminated, U::receiver_displacement, 0);
+	use_resolved_light(!environment_shadows);
+	renderer.call_triangles(D::GROUND_SHADOW_CASTERS);
+	set_uniform(shaders.illuminated, U::receiver_displacement, 1);
+	use_resolved_light(true);
+
+	within_strict_fow([&]() {
+		set_shader_with_matrix(shaders.pure_color_highlight);
+		renderer.call_triangles(D::MISSILES_SHADOWS);
+	});
+
+	set_shader_with_matrix(shaders.illuminated);
+
+	renderer.call_triangles(D::DIM_WANDERING_PIXELS);
+
+	{
+		set_shader_with_matrix(shaders.pure_color_highlight);
+
+		draw_sentience_borders();
+		draw_area_markers();
+		draw_interaction_sensor();
+
+		renderer.call_and_clear_lines();
+	}
+
+	set_shader(shaders.illuminated);
+
+	renderer.call_triangles(D::SOLID_OBSTACLES);
+
+	within_strict_fow([&]() {
+		/*
+			Remnants, like shells, with full illumination - so they read clearly anywhere, sun shadows included,
+			the way their neons would light them up.
+		*/
+
+		set_shader(shaders.standard);
+		renderer.call_triangles(D::REMNANTS);
+
+		set_shader_with_matrix(shaders.pure_color_highlight);
+		renderer.call_triangles(D::DROPPED_ITEMS_SHADOWS);
+		renderer.call_triangles(D::DROPPED_ITEMS_BORDERS);
+
+		set_shader_with_matrix(shaders.illuminated);
+		receive_shadows(shaders.illuminated, false);
+		renderer.call_triangles(D::DROPPED_ITEMS_DIFFUSE);
+
+		set_shader_with_matrix(shaders.pure_color_highlight);
+		renderer.call_triangles(D::DROPPED_ITEMS_OVERLAYS);
+	});
+
+	set_shader_with_matrix(shaders.illuminated);
+	receive_shadows(shaders.illuminated, true, CHARACTER_SHADOW_HEIGHT);
+
+	draw_fog_of_war_overlay();
+
+	if (shaders.shadow_sprite) {
+		/*
+			Shadows of characters before all characters, each pixel darkened once -
+			so that heads, backpacks and other attachments don't darken the shadows of bodies,
+			and shadows of neighbouring characters merge.
+			The alpha threshold of the shader keeps faint edges from blocking the solid parts of other sprites.
+		*/
+
+		set_shader_with_matrix(shaders.shadow_sprite);
+
+#if BUILD_STENCIL_BUFFER
+		renderer.set_stencil(true);
+		renderer.clear_single_coverage();
+
+		if (fog_of_war_effective) {
+			renderer.start_single_coverage_where_stencil();
+			renderer.call_triangles(D::ENEMY_SENTIENCE_SHADOWS);
+		}
+
+		renderer.start_single_coverage();
+		renderer.call_triangles(D::FRIENDLY_SENTIENCE_SHADOWS);
+		renderer.finish_single_coverage();
+		renderer.set_stencil(false);
+#else
+		renderer.call_triangles(D::FRIENDLY_SENTIENCE_SHADOWS);
+#endif
+
+		set_shader_with_matrix(shaders.illuminated);
+	}
+
+	draw_sentiences(shaders.illuminated);
+	set_shader_with_matrix(shaders.illuminated);
+	receive_shadows(shaders.illuminated, false);
+	renderer.call_triangles(D::FOREGROUND);
+
+	/*
+		The resolved light holds only for this frame.
+	*/
+
+	use_resolved_light(false);
+
+	overlay_smoke_texture();
+
+	/*
+		Overlay smokes in a single shade, alpha blended over the scene regardless of light.
+	*/
+
+	{
+		renderer.set_active_texture(3);
+		bind_and_update_filtering(fbos.overlay_smoke->get_texture());
+		renderer.set_active_texture(0);
+
+		set_shader(shaders.illuminating_smoke);
+		set_uniform(shaders.illuminating_smoke, U::smoke_flat_intensity, OVERLAY_SMOKE_ALPHA);
+
+		within_strict_fow([&]() {
+			renderer.fullscreen_quad();
+		});
+	}
+	
+	set_shader(shaders.standard);
+	renderer.call_triangles(D::FOREGROUND_GLOWS);
+
+	draw_crosshairs();
+	draw_weapon_laser();
+
+	within_strict_fow([&]() {
+		draw_particles(particle_layer::NEONING_PARTICLES);
+		draw_particles(particle_layer::ILLUMINATING_PARTICLES);
+
+		/* Always on top of all the other particles. */
+		draw_particles(particle_layer::TRAILS);
+
+		/*
+			The missile sprites are drawn on top of all the particles
+			so that the trails never poke above the rounds,
+			and on top of the lying items with all their shadows and highlights.
+			Only their shadows stay early in the order, as they are cast on the ground.
+		*/
+
+		set_shader(shaders.standard);
+		renderer.call_triangles(D::MISSILES);
+	});
+
+	renderer.call_triangles(D::ILLUMINATING_WANDERING_PIXELS);
+
+	draw_sentience_HUDs();
+
+	set_shader_with_non_zoomed_matrix(shaders.standard);
+
+	if (settings.draw_nicknames) {
+		renderer.call_triangles(D::NICKNAMES);
+	}
+
+	if (settings.draw_health_numbers) {
+		renderer.call_triangles(D::HEALTH_NUMBERS);
+	}
+
+	if (settings.draw_small_health_bars) {
+		renderer.call_triangles(D::SMALL_HEALTH_BARS);
+	}
+
+	renderer.call_triangles(D::SENTIENCE_INDICATORS);
+	renderer.call_triangles(D::INDICATORS_AND_CALLOUTS);
+
+	set_shader_with_matrix(shaders.exploding_rings);
+
+	renderer.call_triangles(D::EXPLODING_RINGS);
+	draw_pure_color_highlights();
+	renderer.call_triangles(D::THUNDERS);
+
+	set_shader(shaders.standard);
+
+	auto is_reasonably_in_view = [&](const const_entity_handle character) {
+		if (!fog_of_war_effective) {
+			return true;
+		}
+
+		return ::is_reasonably_in_view(
+			viewed_character,
+			character,
+			in.pre_step_crosshair_displacement,
+			interp,
+			considered_fow,
+			settings.teammates_are_enemies
+		);
+	};
+
+	if (settings.draw_damage_indicators) {
+		damage_indication.draw_indicators(
+			is_reasonably_in_view,
+			viewed_character,
+			interp,
+			in.damage_indication,
+			game_images,
+			in.fonts,
+			get_drawer(), 
+			cone
+		);
+	}
+
+	renderer.call_and_clear_triangles();
+	renderer.call_and_clear_lines();
+
+	/*
+		The minimap buffers are drawn later, in work.cpp -
+		after the user's filtering is restored on the general atlas,
+		so the zoom-out LINEAR filtering never blurs the minimap icons.
+	*/
+
+	shaders.standard->set_projection(renderer, matrix);
+
+	if (in.general_atlas) {
+		in.general_atlas->set_as_current(renderer);
+	}
+}
+
+float illuminated_rendering_input::get_environment_shadow_strength() const {
+	const auto& cosm = camera.viewed_character.get_cosmos();
+	const auto map_strength = cosm.get_common_significant().light.sun_shadows.strength;
+
+	if (!perf_settings.sun_shadows.enabled_for(map_strength) || !fbos.shadow.has_value()) {
+		return 0.0f;
+	}
+
+	/*
+		A shadow fading linearly to (1 - smoothness) of its strength is on average (2 - smoothness) / 2 as dark.
+		Dividing by (2 - smoothness) keeps the average at half the map's strength for any smoothness,
+		and leaves the map's strength intact at the base of fully smooth shadows.
+	*/
+
+	const auto smoothness_compensation = 1.0f / (2.0f - get_environment_shadow_smoothness());
+
+	return std::clamp(map_strength * perf_settings.sun_shadows.strength_mult * smoothness_compensation, 0.0f, 1.0f);
+}
+
+float illuminated_rendering_input::get_environment_shadow_smoothness() const {
+	const auto& cosm = camera.viewed_character.get_cosmos();
+	const auto map_smoothness = cosm.get_common_significant().light.sun_shadows.smoothness;
+
+	return std::clamp(map_smoothness * perf_settings.sun_shadows.smoothness_mult, 0.0f, 1.0f);
+}
+
+float special_physics::get_teleport_alpha() const {
+	if (inside_portal.is_set()) {
+		return 0.0f;
+	}
+
+	if (teleport_progress == 0.0f) {
+		return 1.0f;
+	}
+
+	auto result = 1.0f - std::clamp(teleport_progress, 0.0f, 1.0f);
+	result *= result;
+
+	const auto unit = float(teleport_decrease_opacity_to) / 255.0f;
+	return augs::interp(unit, 1.0f, result);
+}
+

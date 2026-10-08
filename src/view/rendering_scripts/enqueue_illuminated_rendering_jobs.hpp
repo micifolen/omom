@@ -1,0 +1,1238 @@
+#pragma once
+#include "view/rendering_scripts/draw_character_glow.h"
+#include "game/detail/visible_entities.hpp"
+#include "view/rendering_scripts/is_reasonably_in_view.hpp"
+#include "game/detail/use_interaction_logic.h"
+#include "view/rendering_scripts/falling_item_offsets.h"
+#include "game/detail/low_ammo_magazine.h"
+#include "game/detail/inventory/direct_attachment_offset.h"
+#include "view/rendering_scripts/corpse_head_overlays.h"
+#include "view/rendering_scripts/draw_minimap.h"
+#include "view/rendering_scripts/draw_environment_shadows.h"
+#include "view/audiovisual_state/systems/minimap_sighting_system.h"
+#include "view/rendering_scripts/draw_finishing_traces.h"
+
+const rgba CHARACTER_SHADOW_COLOR = rgba(0, 0, 0, 100);
+const vec2 CHARACTER_SHADOW_OFFSET = vec2(21, 21);
+
+/*
+	Living characters throw their shadows a bit closer than CHARACTER_SHADOW_OFFSET,
+	and dead ones still standing before they fall - closer yet.
+*/
+
+const float LIVING_CHARACTER_SHADOW_MULT = 0.8f;
+const float STANDING_CORPSE_SHADOW_MULT = 0.2f;
+
+/*
+	Under the sun, character shadows grow with the sun's step as if cast from this height,
+	up to the length of CHARACTER_SHADOW_OFFSET - which they reach under CHARACTER_SHADOW_FULL_LENGTH_SUN_STEP.
+	Longer ones would look comical.
+*/
+
+const vec2 CHARACTER_SHADOW_FULL_LENGTH_SUN_STEP = vec2::square(2.34f);
+const float CHARACTER_SUN_SHADOW_HEIGHT = CHARACTER_SHADOW_OFFSET.length() / CHARACTER_SHADOW_FULL_LENGTH_SUN_STEP.length();
+
+/*
+	Lying corpses, their heads, remnants and detached heads lie flat - their shadows are short.
+*/
+
+const vec2 CORPSE_SHADOW_OFFSET = vec2(5, 5);
+const rgba CORPSE_SHADOW_COLOR = rgba(0, 0, 0, 180);
+const rgba MISSILE_SHADOW_COLOR = rgba(0, 0, 0, 140);
+const rgba THROWN_EXPLOSIVE_SHADOW_COLOR = rgba(0, 0, 0, 170);
+const vec2 MISSILE_SHADOW_SCALE = vec2(1.4f, 1.8f);
+
+inline auto make_shadow_offset_customizer(const vec2 offset) {
+	return [offset](auto modified_input) {
+		modified_input.renderable_transform += offset;
+		return modified_input;
+	};
+}
+
+/*
+	A sprite lying on the ground throws its silhouette along the sun into the environment shadow texture,
+	and marks its footprint where it lies, so that it only receives shadows of what's taller - never its own.
+	The color encodes the shadow, so no special effect may alter it - e.g. the color wave of dragon fish.
+*/
+
+template <class R, class M, class I>
+void draw_ground_silhouette_shadow(
+	R renderable,
+	const M& manager,
+	I input,
+	const uint8_t height,
+	const rgba shadow_color,
+	const vec2 sun_step
+) {
+	renderable.effect = augs::sprite_special_effect::NONE;
+
+	renderable.set_color(rgba(0, 0, height, 0));
+	augs::draw(renderable, manager, input);
+
+	renderable.set_color(shadow_color);
+	input.renderable_transform.pos += sun_step * static_cast<float>(height);
+	augs::draw(renderable, manager, input);
+}
+
+void enqueue_illuminated_rendering_jobs(
+	augs::thread_pool& pool, 
+	const illuminated_rendering_input& in
+) {
+	using D = augs::dedicated_buffer;
+	using DV = augs::dedicated_buffer_vector;
+
+	const bool viewer_is_spectator = in.viewer_is_spectator;
+	const bool draw_enemy_silhouettes = viewer_is_spectator && in.drawing.draw_enemy_silhouettes_in_spectator;
+	const bool see_enemies_behind_walls = in.see_enemies_behind_walls;
+	const bool streamer_mode = in.streamer_mode;
+	const auto& necessarys = in.necessary_images;
+
+	const auto& special_indicators = in.special_indicators;
+
+	const auto& cone = in.camera.cone;
+	const auto& av = in.audiovisuals;
+	const auto& thunders = av.get<thunder_system>();
+	const auto& exploding_rings = av.get<exploding_ring_system>();
+	const auto& screen_size = cone.screen_size;
+	const auto settings = in.drawing;
+	const auto& damage_indication_settings = in.damage_indication;
+	const auto& queried_cone = in.queried_cone;
+	const auto& actual_cone = in.camera.cone;
+	const auto& visible = in.all_visible;
+	const auto& interp = av.template get<interpolation_system>();
+	const auto& finishing_traces = av.template get<finishing_trace_system>();
+	const auto& damage_indication = av.template get<damage_indication_system>();
+	const auto& gui_font = in.fonts.gui;
+	const auto& game_images = in.game_images;
+	const auto pre_step_crosshair_displacement = in.pre_step_crosshair_displacement;
+
+	const auto& viewed_character = in.camera.viewed_character;
+	const auto potential_interaction = viewed_character.alive() ? ::query_use_interaction(viewed_character) : std::optional<use_interaction_variant>();
+
+	const auto viewed_character_transform = viewed_character ? viewed_character.find_viewing_transform(interp) : std::optional<transformr>();
+	(void)viewed_character_transform;
+
+	const auto& cosm = viewed_character.get_cosmos();
+	const auto indicator_meta = in.indicator_meta;
+
+	const auto considered_fow = in.get_considered_fow();
+
+	const bool environment_shadows = in.environment_shadows_enabled();
+
+	auto along_the_sun = [&](const vec2 sunless_offset) {
+		return ::calc_along_the_sun(sunless_offset, cosm.get_common_significant().light.sun_shadows.step, environment_shadows);
+	};
+
+	auto calc_character_shadow_offset = [&](const float mult) {
+		const auto longest = along_the_sun(CHARACTER_SHADOW_OFFSET) * mult;
+
+		if (!environment_shadows) {
+			return longest;
+		}
+
+		const auto by_sun = cosm.get_common_significant().light.sun_shadows.step * CHARACTER_SUN_SHADOW_HEIGHT * mult;
+		return by_sun.length() < longest.length() ? by_sun : longest;
+	};
+
+	const auto character_shadow_offset = calc_character_shadow_offset(LIVING_CHARACTER_SHADOW_MULT);
+	const auto standing_corpse_shadow_offset = calc_character_shadow_offset(STANDING_CORPSE_SHADOW_MULT);
+	const auto corpse_shadow_offset = along_the_sun(CORPSE_SHADOW_OFFSET);
+	const auto missile_shadow_offset = along_the_sun(MISSILE_SHADOW_OFFSET);
+
+#if BUILD_STENCIL_BUFFER
+	const bool fog_of_war_effective = 
+		viewed_character_transform.has_value() 
+		&& considered_fow.is_enabled()
+	;
+#else
+	const bool fog_of_war_effective = false;
+#endif
+
+	const auto fog_of_war_character_id = fog_of_war_effective ? viewed_character : std::optional<entity_id>();
+	const auto cast_highlight_tex = necessarys.at(assets::necessary_image_id::CAST_HIGHLIGHT);
+
+	auto& dedicated = in.renderer.dedicated;
+
+	const auto global_time_seconds = cosm.get_total_seconds_passed(in.interpolation_ratio);
+	const auto real_global_time_seconds = cosm.get_clock().get_real_seconds_passed(in.interpolation_ratio);
+	const auto real_dt_secs = cosm.get_clock().get_real_dt().in_seconds<double>();
+
+	auto get_drawer_for = [&](const D d) {
+		return augs::drawer_with_default { dedicated[d].triangles, necessarys.at(assets::necessary_image_id::BLANK) };
+	};
+
+	const bool draw_long_bullet_neons = in.drawing.bullet_trails != bullet_trails_mode::NONE;
+
+	auto make_drawing_input = [get_drawer_for, &game_images, global_time_seconds, real_global_time_seconds, &av, &interp, queried_cone, draw_long_bullet_neons](const D d) {
+		return draw_renderable_input { 
+			{
+				get_drawer_for(d), 
+				game_images, 
+				global_time_seconds,
+				real_global_time_seconds,
+				flip_flags(),
+				av.randomizing,
+				queried_cone,
+				draw_long_bullet_neons,
+				interp.get_bullets_alpha()
+			},
+			interp
+		};
+	};
+
+	auto get_line_drawer_for = [&](const D d) {
+		return augs::line_drawer_with_default { dedicated[d].lines, necessarys.at(assets::necessary_image_id::BLANK) };
+	};
+
+	auto sentience_hud_job = [viewer_is_spectator, draw_enemy_silhouettes, &cosm, considered_fow, streamer_mode, cone, real_global_time_seconds, settings, &necessarys, &dedicated, queried_cone, &visible, viewed_character, &interp, &gui_font, indicator_meta, fog_of_war_effective, pre_step_crosshair_displacement, &damage_indication, damage_indication_settings]() {
+		(void)fog_of_war_effective;
+		augs::constant_size_vector<requested_sentience_meter, 3> requested_meters;
+
+		std::array<assets::necessary_image_id, 3> circles = {
+			assets::necessary_image_id::CIRCULAR_BAR_LARGE,
+			assets::necessary_image_id::CIRCULAR_BAR_UNDER_LARGE,
+			assets::necessary_image_id::CIRCULAR_BAR_UNDER_UNDER_LARGE
+		};
+
+		int current_circle = 0;
+
+		auto& target_vectors = dedicated[DV::SENTIENCE_HUDS];
+		target_vectors.resize(3);
+
+		if (settings.draw_hp_bar) {
+			requested_meters.push_back({ 
+				necessarys.at(circles[current_circle++]),
+				meter_id::of<health_meter_instance>(),
+
+				target_vectors[0]
+			});
+		}
+
+		if (settings.draw_pe_bar) {
+			requested_meters.push_back({
+				necessarys.at(circles[current_circle++]),
+				meter_id::of<personal_electricity_meter_instance>(),
+
+				target_vectors[1]
+			});
+		}
+
+		if (settings.draw_cp_bar) {
+			requested_meters.push_back({
+				necessarys.at(circles[current_circle++]),
+				meter_id::of<consciousness_meter_instance>(),
+
+				target_vectors[2]
+			});
+		}
+
+		real32 color_indicator_angle = 45.f;
+
+		if (!settings.draw_nicknames) {
+			color_indicator_angle = 0.f;
+		}
+
+		auto sentience_queried_cone = queried_cone;
+		sentience_queried_cone.eye.zoom *= 0.8f;
+
+		auto& nicknames_output = dedicated[D::NICKNAMES].triangles;
+		auto& health_numbers_output = dedicated[D::HEALTH_NUMBERS].triangles;
+		auto& indicators_output = dedicated[D::SENTIENCE_INDICATORS].triangles;
+		auto& small_health_bars_output = dedicated[D::SMALL_HEALTH_BARS].triangles;
+
+		auto is_reasonably_in_view = [&](const const_entity_handle character) {
+			if (!fog_of_war_effective) {
+				return true;
+			}
+
+			return ::is_reasonably_in_view(
+				viewed_character,
+				character,
+				pre_step_crosshair_displacement,
+				interp,
+				considered_fow,
+				settings.teammates_are_enemies,
+				draw_enemy_silhouettes
+			);
+		};
+
+		const auto input = draw_sentiences_hud_input {
+			nicknames_output,
+			health_numbers_output,
+			indicators_output,
+			small_health_bars_output,
+			cone,
+			sentience_queried_cone,
+			visible,
+			settings,
+			cosm,
+			viewed_character,
+			interp,
+			damage_indication,
+			damage_indication_settings,
+			real_global_time_seconds,
+			gui_font,
+			requested_meters,
+
+			necessarys.at(assets::necessary_image_id::BLANK),
+			necessarys.at(assets::necessary_image_id::BIG_COLOR_INDICATOR),
+			necessarys.at(assets::necessary_image_id::DANGER_INDICATOR),
+			necessarys.at(assets::necessary_image_id::DEATH_INDICATOR),
+			necessarys.at(assets::necessary_image_id::BOMB_INDICATOR),
+			necessarys.at(assets::necessary_image_id::DEFUSING_INDICATOR),
+
+			color_indicator_angle,
+			indicator_meta,
+			is_reasonably_in_view,
+			streamer_mode,
+			viewer_is_spectator
+		};
+
+		draw_sentiences_hud(input);
+	};
+
+	auto explosives_hud_job = [cone, &dedicated, global_time_seconds, &necessarys, settings, &interp, &cosm, viewed_character]() {
+		int current_hud = 0;
+
+		auto& target_vectors = dedicated[DV::EXPLOSIVE_HUDS];
+		target_vectors.resize(3);
+
+		requested_explosive_huds requests;
+
+		requests[circular_bar_type::SMALL] = {
+			necessarys.at(assets::necessary_image_id::CIRCULAR_BAR_SMALL),
+			std::addressof(target_vectors[current_hud++])
+		};
+
+		requests[circular_bar_type::MEDIUM] = {
+			necessarys.at(assets::necessary_image_id::CIRCULAR_BAR_MEDIUM),
+			std::addressof(target_vectors[current_hud++])
+		};
+
+		requests[circular_bar_type::OVER_MEDIUM] = {
+			necessarys.at(assets::necessary_image_id::CIRCULAR_BAR_OVER_MEDIUM),
+			std::addressof(target_vectors[current_hud++])
+		};
+
+		draw_circular_progresses({
+			cone,
+			settings,
+			requests,
+			interp,
+			cosm,
+			viewed_character,
+			global_time_seconds
+		});
+	};
+
+	auto indicators_and_callouts_job = [&interp, viewed_character, &gui_font, &special_indicators, get_drawer_for, get_line_drawer_for, settings, &cosm, cone, screen_size, &visible]() {
+		auto drawer = get_drawer_for(D::INDICATORS_AND_CALLOUTS);
+		auto line_drawer = get_line_drawer_for(D::INDICATORS_AND_CALLOUTS);
+
+		if (settings.draw_tactical_indicators.is_enabled) {
+			const auto alpha = settings.draw_tactical_indicators.value;
+
+			for (const auto& special : special_indicators) {
+				if (special.minimap_only) {
+					continue;
+				}
+
+				auto col = special.color;
+				col.mult_alpha(alpha);
+
+				const auto world_pos = special.transform.pos;
+				const auto pos = cone.to_screen_space(world_pos);
+
+				std::string primary_text;
+
+				if (const auto callout = cosm[::get_current_callout(cosm, world_pos)]) {
+					primary_text = callout.get_name();
+				}
+
+				const auto& tex = special.offscreen_tex;
+
+				::draw_offscreen_indicator(
+					drawer,
+					settings.draw_offscreen_indicators,
+					special.draw_onscreen,
+					col,
+					tex,
+					pos,
+					screen_size,
+					false,
+					std::nullopt,
+					gui_font,
+					primary_text,
+					{},
+					cone.to_screen_space(viewed_character.get_viewing_transform(interp).pos),
+					settings.offscreen_reference_mode
+				);
+			}
+		}
+
+		{
+			const auto& callouts = settings.draw_callout_indicators;
+
+			if (callouts.is_enabled) {
+				visible.for_each<render_layer::CALLOUT_MARKERS>(cosm, [&](const auto e) {
+					e.template dispatch_on_having_all<invariants::area_marker>([&](const auto typed_handle) { 
+						const auto where = typed_handle.get_logic_transform();
+						const auto& callout_alpha = callouts.value;
+
+						::draw_area_indicator(typed_handle, line_drawer, where, callout_alpha, drawn_indicator_type::INGAME, 1.0f);
+
+						using namespace augs::gui::text;
+
+						const auto& callout_name = typed_handle.get_name();
+
+						print_stroked(
+							drawer,
+							cone.to_screen_space(typed_handle.get_logic_transform().pos),
+							formatted_string { callout_name, { gui_font, white } },
+							{ augs::ralign::CX, augs::ralign::CY }
+						);
+					});
+				});
+			}
+		}
+
+		if (settings.print_current_character_callout) {
+			if (const auto result = cosm[::get_current_callout(viewed_character, interp)]) {
+				const auto& name = result.get_name();
+
+				using namespace augs::gui::text;
+
+				const auto indicator_pos = augs::get_screen_pos_from_offset(screen_size, settings.radar_pos); 
+
+				print_stroked(
+					drawer,
+					indicator_pos,
+					formatted_string { name, { gui_font, yellow } }
+				);
+			}
+		}
+	};
+
+	auto enqueue_layer_jobs = [&]() {
+		auto make_helper = [&](const D d) {
+			return helper_drawer {
+				visible,
+				cosm,
+				make_drawing_input(d)
+			};
+		};
+
+		{
+			auto job = [&visible, &cosm, corpse_shadow_offset, solids_in = make_drawing_input(D::SOLID_OBSTACLES), h1 = make_helper(D::SOLID_OBSTACLES), h2 = make_helper(D::FOREGROUND), h3 = make_helper(D::WALL_ILLUMINATIONS)]() {
+				/*
+					Bodies lying around like detached heads throw translucent shadows like corpses.
+				*/
+
+				visible.for_each<render_layer::SOLID_OBSTACLES>(cosm, [&](const auto& handle) {
+					handle.template dispatch_on_having_all<invariants::sprite, invariants::render>([&](const auto& typed_handle) {
+						if (typed_handle.template get<invariants::render>().casts_overlay_shadow) {
+							::specific_draw_color_highlight(typed_handle, CORPSE_SHADOW_COLOR, solids_in, ::make_shadow_offset_customizer(corpse_shadow_offset));
+						}
+					});
+				});
+
+				h1.draw<
+					render_layer::SOLID_OBSTACLES
+				>();
+
+				h2.draw<
+					render_layer::FOREGROUND,
+					render_layer::SURFACE_DECALS
+				>();
+
+				h3.draw<
+					special_render_function::ILLUMINATE_AS_WALL
+				>();
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto job = [
+				&visible,
+				&cosm,
+				missile_shadow_offset,
+				global_time_seconds,
+				&finishing_traces,
+				remnants_neons_in = make_drawing_input(D::REMNANTS_NEONS),
+				missiles_neons_in = make_drawing_input(D::MISSILES_NEONS),
+				h1 = make_helper(D::UNDER_FOREGROUND_NEONS),
+				h2 = make_helper(D::FOREGROUND_NEONS),
+				h3 = make_helper(D::MISSILES_NEONS)
+			]() {
+				h1.draw_neons<
+					render_layer::PLANTED_ITEMS,
+					render_layer::OBSTACLES_UNDER_MISSILES,
+					render_layer::SOLID_OBSTACLES
+					/* Sentiences would come here if not for the fact that they have special neon logic */
+				>();
+
+				/*
+					Neons of shells follow their raised sprites - in their own buffer, hidden like the shells in strict fog of war.
+				*/
+
+				visible.for_each<render_layer::REMNANTS>(cosm, [&](const auto& handle) {
+					handle.template dispatch_on_having_all<invariants::sprite>([&](const auto& typed_handle) {
+						const auto shell_fall = ::find_shell_fall(typed_handle);
+						const auto sprite_offset = ::calc_shell_offsets(shell_fall, cosm.get_fixed_delta(), global_time_seconds, missile_shadow_offset).sprite;
+
+						::specific_draw_neon_map(typed_handle, remnants_neons_in, ::make_shadow_offset_customizer(sprite_offset));
+					});
+				});
+
+				h2.draw_neons<
+					render_layer::FOREGROUND,
+					render_layer::FOREGROUND_GLOWS,
+					render_layer::SURFACE_DECALS
+				>();
+
+				h3.draw_neons<
+					render_layer::MISSILES
+				>();
+
+				::draw_finishing_traces(finishing_traces, cosm, missiles_neons_in, true);
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto job = [h1 = make_helper(D::GROUND_NEONS), h2 = make_helper(D::GROUND_NEON_OCCLUDERS), h3 = make_helper(D::FOREGROUND_NEON_OCCLUDERS)]() {
+				h1.draw_neons<
+					render_layer::GROUND
+				>();
+
+				h2.draw<
+					special_render_function::COVER_GROUND_NEONS
+				>();
+
+				h3.draw<
+					special_render_function::COVER_GROUND_NEONS_FOREGROUND
+				>();
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto job = [&visible, &cosm, corpse_shadow_offset, missile_shadow_offset, global_time_seconds, remnants_in = make_drawing_input(D::REMNANTS)]() {
+				const auto dt = cosm.get_fixed_delta();
+
+				/*
+					Shells cast shadows like thrown explosives,
+					other remnants lie on the floor with short shadows like corpses.
+				*/
+
+				/*
+					The shadows and then the sprites visit the remnants in the same order,
+					so the offsets computed for the shadows are reused for the sprites.
+				*/
+
+				thread_local std::vector<flying_item_offsets> remnant_offsets;
+				remnant_offsets.clear();
+
+				auto for_each_remnant = [&](auto callback) {
+					std::size_t index = 0;
+					const bool compute = remnant_offsets.empty();
+
+					visible.for_each<render_layer::REMNANTS>(cosm, [&](const auto& handle) {
+						handle.template dispatch_on_having_all<invariants::sprite>([&](const auto& typed_handle) {
+							const auto shell_fall = ::find_shell_fall(typed_handle);
+
+							if (compute) {
+								remnant_offsets.push_back(::calc_shell_offsets(shell_fall, dt, global_time_seconds, missile_shadow_offset));
+							}
+
+							callback(typed_handle, shell_fall != nullptr, remnant_offsets[index++]);
+						});
+					});
+				};
+
+				for_each_remnant([&](const auto& typed_handle, const bool shell, const auto& offsets) {
+					if (shell) {
+						::specific_draw_color_highlight(
+							typed_handle,
+							SHELL_SHADOW_COLOR,
+							remnants_in,
+							::make_shadow_offset_customizer(offsets.shadow),
+							vec2::square(offsets.shadow_scale)
+						);
+					}
+					else {
+						::specific_draw_color_highlight(typed_handle, CORPSE_SHADOW_COLOR, remnants_in, ::make_shadow_offset_customizer(corpse_shadow_offset));
+					}
+				});
+
+				for_each_remnant([&](const auto& typed_handle, const bool /* shell */, const auto& offsets) {
+					::specific_draw_entity(typed_handle, remnants_in, ::make_shadow_offset_customizer(offsets.sprite));
+				});
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto pickable_item_to_highlight = entity_id();
+			auto pickable_color = white;
+
+			const auto bad_color = rgba(255, 50, 50, 255);
+
+			if (potential_interaction.has_value()) {
+				auto handle_interaction = [&](const auto& typed_interaction) {
+					using T = remove_cref<decltype(typed_interaction)>;
+
+					if constexpr(std::is_same_v<T, item_pickup>) {
+						const auto item_handle = cosm[typed_interaction.item];
+						const auto pickup_slot = viewed_character.find_pickup_target_slot_for(item_handle, { slot_finding_opt::OMIT_MOUNTED_SLOTS });
+
+						pickable_item_to_highlight = typed_interaction.item;
+
+						if (pickup_slot.dead()) {
+							pickable_color = bad_color;
+						}
+					}
+				};
+
+				std::visit(handle_interaction, *potential_interaction);
+			}
+
+			auto job = [
+				&visible,
+				&cosm,
+				global_time_seconds,
+				real_global_time_seconds,
+				real_dt_secs,
+				missile_shadow_offset,
+				draw_bullet_shadows = in.drawing.draw_bullet_shadows,
+				pickable_item_to_highlight,
+				pickable_color,
+				shadows  = make_drawing_input(D::DROPPED_ITEMS_SHADOWS),
+				borders  = make_drawing_input(D::DROPPED_ITEMS_BORDERS),
+				diffuse  = make_drawing_input(D::DROPPED_ITEMS_DIFFUSE),
+				neons    = make_drawing_input(D::DROPPED_ITEMS_NEONS),
+				overlays = make_drawing_input(D::DROPPED_ITEMS_OVERLAYS)
+			]() {
+				visible.for_each<render_layer::ITEMS_ON_GROUND>(
+					cosm,
+					[&](const auto& handle) {
+						handle.template dispatch_on_having_any<invariants::item, invariants::touch_collectible>([&](const auto& typed_item) {
+							const bool touch_collectible = typed_item.template has<invariants::touch_collectible>();
+
+							const auto is_laying_on_ground = [&]() {
+								if (touch_collectible) {
+									return true;
+								}
+
+								if (const auto cache = find_colliders_cache(typed_item)) {
+									if (cache->constructed_fixtures.size() > 0) {
+										const auto current_filter = cache->constructed_fixtures[0]->GetFilterData();
+										const auto lying_item = filters[predefined_filter_type::LYING_ITEM];
+
+										if (current_filter == lying_item) {
+											return true;
+										}
+									}
+								}
+
+								return false;
+							}();
+
+
+							/*
+								Items thrown or dropped explicitly are drawn as flying until they hit the floor for the last time,
+								even though they can already be picked up.
+							*/
+
+							const auto* const fall = ::find_item_fall(typed_item);
+
+							const bool falling = fall != nullptr && fall->floor_hits_left > 0;
+
+							const auto throw_flash_alpha = [&]() {
+								if (fall == nullptr || !fall->when_started_falling.was_set()) {
+									return 0.f;
+								}
+
+								const auto elapsed_secs = global_time_seconds - fall->when_started_falling.in_seconds(cosm.get_fixed_delta());
+								return static_cast<float>(1.0 - std::clamp(elapsed_secs / ITEM_THROW_FLASH_SECS, 0.0, 1.0));
+							}();
+
+							auto draw_throw_flash = [&](auto&& customize_input) {
+								if (throw_flash_alpha > 0.f) {
+									auto flash_color = rgba(white);
+									flash_color.a = 40;
+									flash_color.mult_alpha(throw_flash_alpha);
+
+									::specific_draw_color_highlight(typed_item, flash_color, overlays, customize_input);
+								}
+							};
+
+							/*
+								Nearly empty magazines are not worth a bounce -
+								they lie on the ground like shells.
+							*/
+
+							const bool low_ammo_magazine = ::is_low_ammo_magazine(typed_item);
+
+							if (!is_laying_on_ground || falling || low_ammo_magazine) {
+								/*
+									Items hopping like shells - unmounted magazines - are drawn like shells too.
+								*/
+
+								const bool like_shell = low_ammo_magazine || (fall != nullptr && fall->hops_like_shell);
+
+								/*
+									A magazine that never fell (e.g. placed on the map) lies on the ground all the same.
+								*/
+
+								auto resting_fall = item_fall_state();
+
+								const auto* const shell_fall = [&]() -> const item_fall_state* {
+									const bool never_fell = !falling && (fall == nullptr || !fall->when_landed.was_set());
+
+									if (never_fell) {
+										resting_fall.when_landed = cosm.get_timestamp();
+										return std::addressof(resting_fall);
+									}
+
+									return fall;
+								}();
+
+								const auto offsets = 
+									like_shell ?
+									::calc_shell_offsets(shell_fall, typed_item.get_cosmos().get_fixed_delta(), global_time_seconds, missile_shadow_offset) :
+									::calc_flying_item_offsets(typed_item, global_time_seconds, missile_shadow_offset)
+								;
+
+								if (draw_bullet_shadows) {
+									const auto shadow_color = [&]() {
+										if (like_shell) {
+											return SHELL_SHADOW_COLOR;
+										}
+
+										return ::is_like_thrown_explosive(typed_item) ? THROWN_EXPLOSIVE_SHADOW_COLOR : MISSILE_SHADOW_COLOR;
+									}();
+
+									::specific_draw_color_highlight(
+										typed_item,
+										shadow_color,
+										shadows,
+										::make_shadow_offset_customizer(offsets.shadow),
+										vec2::square(offsets.shadow_scale)
+									);
+								}
+
+								::specific_draw_entity(typed_item, diffuse, ::make_shadow_offset_customizer(offsets.sprite));
+								::specific_draw_neon_map(typed_item, neons, ::make_shadow_offset_customizer(offsets.sprite));
+								draw_throw_flash(::make_shadow_offset_customizer(offsets.sprite));
+
+								if (typed_item.get_id() == pickable_item_to_highlight) {
+									auto standard_border_provider = [pickable_color](const auto& typed_handle) -> std::optional<rgba> {
+										(void)typed_handle;
+										return pickable_color;
+									};
+
+									::specific_draw_border(typed_item, borders, standard_border_provider, ::make_shadow_offset_customizer(offsets.sprite));
+								}
+
+								return;
+							}
+
+							const auto bounce_dir = touch_collectible ? vec2(0, -1) : vec2(-1, -1);
+							const auto bounce_height = touch_collectible ? 10.0f : 8.f;
+
+							/*
+								Items start bouncing from the ground as they come to rest,
+								so they don't jump when they stop being drawn as flying.
+								A third of a second back is where the bounce is lowest.
+							*/
+
+							const auto bounce_secs = [&]() {
+								if (fall != nullptr && fall->when_landed.was_set()) {
+									return real_global_time_seconds - fall->when_landed.step * real_dt_secs - 1.0 / 3.0;
+								}
+
+								return real_global_time_seconds + 2.0 * double(typed_item.get_id().raw.indirection_index);
+							}();
+
+							const auto bounce_progress = static_cast<float>((1.0 + std::sin(1.5 * bounce_secs * PI<double>)) / 2.0);
+
+							const auto shadow_alpha = bounce_progress;
+							const auto overlay_alpha = 1.0f - bounce_progress;
+							const auto bounce_elevation = bounce_progress * bounce_height * bounce_dir;
+
+							auto make_offset_input = [bounce_elevation](auto offset_input) {
+								offset_input.renderable_transform += bounce_elevation;
+								return offset_input;
+							};
+
+							auto shadow_color = rgba(0, 0, 0, 120);
+							shadow_color.mult_alpha(shadow_alpha);
+
+							auto overlay_color = rgba(255, 255, 255, touch_collectible ? 100 : 40);
+							overlay_color.mult_alpha(overlay_alpha);
+
+							const bool pickable = typed_item.get_id() == pickable_item_to_highlight;
+
+							::specific_draw_color_highlight(typed_item, shadow_color, shadows);
+							::specific_draw_entity(typed_item, diffuse, make_offset_input);
+							::specific_draw_neon_map(typed_item, neons, make_offset_input);
+
+							if (!pickable) {
+								::specific_draw_color_highlight(typed_item, overlay_color, overlays, make_offset_input);
+							}
+
+							draw_throw_flash(make_offset_input);
+
+							if (pickable) {
+								auto standard_border_provider = [pickable_color](const auto& typed_handle) -> std::optional<rgba> {
+									(void)typed_handle;
+									return pickable_color;
+								};
+
+								::specific_draw_border(typed_item, borders, standard_border_provider, make_offset_input);
+							}
+						});
+					}
+				);
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			const bool draw_bullet_shadows = in.drawing.draw_bullet_shadows;
+
+			auto job = [
+				draw_bullet_shadows,
+				missile_shadow_offset,
+				&visible,
+				&cosm,
+				ground_in = make_drawing_input(D::GROUND),
+				ground_shadow_casters_in = make_drawing_input(D::GROUND_SHADOW_CASTERS),
+				&finishing_traces,
+				h2 = make_helper(D::MISSILES),
+				missiles_in = make_drawing_input(D::MISSILES),
+				missiles_shadows  = make_drawing_input(D::MISSILES_SHADOWS)
+			]() {
+				/*
+					Ground sprites that cast shadows go to their own buffer, drawn above decals and corpses.
+				*/
+
+				visible.for_each<
+					render_layer::GROUND,
+					render_layer::PLANTED_ITEMS,
+					render_layer::OBSTACLES_UNDER_MISSILES
+				>(cosm, [&](const auto& handle) {
+					const auto render = handle.template find<invariants::render>();
+					const bool casts_shadow = render != nullptr && render->casts_foreground_shadow;
+
+					::draw_entity(handle, casts_shadow ? ground_shadow_casters_in : ground_in);
+				});
+
+				h2.draw<
+					render_layer::MISSILES
+				>();
+
+				::draw_finishing_traces(finishing_traces, cosm, missiles_in, false);
+
+				if (draw_bullet_shadows) {
+					visible.for_each<render_layer::MISSILES>(
+						cosm,
+						[&](const auto& handle) {
+							auto make_offset_input = [missile_shadow_offset](auto offset_input) {
+								offset_input.renderable_transform += missile_shadow_offset;
+								return offset_input;
+							};
+
+							handle.template dispatch_on_having_all<invariants::missile>([&](const auto& typed_item) {
+								::specific_draw_color_highlight(typed_item, MISSILE_SHADOW_COLOR, missiles_shadows, make_offset_input, MISSILE_SHADOW_SCALE);
+							});
+						}
+					);
+				}
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto job = [h3 = make_helper(D::FOREGROUND_GLOWS)]() {
+				h3.draw<
+					render_layer::FOREGROUND_GLOWS
+				>();
+			};
+
+			pool.enqueue(job);
+		}
+
+		{
+			auto job = [
+				h4 = make_helper(D::GROUND_DECALS),
+				h5 = make_helper(D::GROUND_DECALS_NEONS),
+				h6 = make_helper(D::LYING_CORPSES),
+				h7 = make_helper(D::LYING_CORPSES_NEONS),
+				&cosm,
+				&interp,
+				&game_images,
+				&visible,
+				queried_cone,
+				corpse_shadow_offset,
+				corpses_in = make_drawing_input(D::LYING_CORPSES),
+				corpse_neons_in = make_drawing_input(D::LYING_CORPSES_NEONS)
+			]() {
+				h4.draw<
+					render_layer::GROUND_DECALS
+				>();
+
+				h5.draw_neons<
+					render_layer::GROUND_DECALS
+				>();
+
+				/*
+					Corpse head/splatter overlays on the LYING_CORPSES layer.
+					Iterates all sentiences (capped at 300) to find ones
+					with a lying corpse, then draws directly if in camera view.
+					Uses torso.head offset from the lying corpse sprite + head_anchor from the head sprite.
+				*/
+
+				const auto camera_aabb = queried_cone.get_visible_world_rect_aabb();
+				const auto& logicals = cosm.get_logical_assets();
+
+				auto for_each_visible_head_overlay = [&](auto callback) {
+					cosm.for_each_having<components::sentience>([&](const auto& typed_handle) {
+						const auto& sentience = typed_handle.template get<components::sentience>();
+
+						if (!sentience.is_dead() || !sentience.has_exploded) {
+							return;
+						}
+
+						const auto lying_corpse_id = sentience.detached.lying_corpse;
+
+						if (const auto lying_corpse = cosm[lying_corpse_id]) {
+							const auto lying_viewing = lying_corpse.get_viewing_transform(interp);
+							const auto& sentience_def = typed_handle.template get<invariants::sentience>();
+
+							::for_each_corpse_head_overlay(lying_corpse, sentience, sentience_def, lying_viewing, logicals,
+								[&](const corpse_head_overlay_info& overlay) {
+									invariants::sprite sprite;
+									sprite.set(overlay.image_id, game_images);
+
+									const auto overlay_aabb = ltrb::center_and_size(overlay.world_transform.pos, vec2(game_images.at(overlay.image_id).get_original_size()));
+
+									if (!camera_aabb.hover(overlay_aabb)) {
+										return;
+									}
+
+									auto input = corpses_in.make_input_for<invariants::sprite>();
+									input.renderable_transform = overlay.world_transform;
+
+									if (overlay.flipped) {
+										input.flip.vertically = true;
+									}
+
+									callback(sprite, input);
+								}
+							);
+						}
+					});
+				};
+
+				/*
+					Shadows of all corpses first, so that none falls over another corpse.
+				*/
+
+				visible.for_each<render_layer::LYING_CORPSES>(cosm, [&](const auto& handle) {
+					handle.template dispatch_on_having_all<invariants::sprite>([&](const auto& typed_handle) {
+						::specific_draw_color_highlight(typed_handle, CORPSE_SHADOW_COLOR, corpses_in, ::make_shadow_offset_customizer(corpse_shadow_offset));
+					});
+				});
+
+				for_each_visible_head_overlay([&](auto sprite, auto input) {
+					sprite.set_color(CORPSE_SHADOW_COLOR);
+					input.renderable_transform.pos += corpse_shadow_offset;
+					augs::draw(sprite, game_images, input);
+				});
+
+				h6.draw<
+					render_layer::LYING_CORPSES
+				>();
+
+				for_each_visible_head_overlay([&](const auto& sprite, const auto& input) {
+					augs::draw(sprite, game_images, input);
+
+					auto neon_input = corpse_neons_in.make_input_for<invariants::sprite>();
+					neon_input.renderable_transform = input.renderable_transform;
+					neon_input.flip = input.flip;
+					neon_input.use_neon_map = true;
+					augs::draw(sprite, game_images, neon_input);
+				});
+
+				h7.draw_neons<
+					render_layer::LYING_CORPSES
+				>();
+			};
+
+			pool.enqueue(job);
+		}
+	};
+
+	auto sentiences_job = [character_shadow_offset, standing_corpse_shadow_offset, draw_enemy_silhouettes, see_enemies_behind_walls, ffa = settings.teammates_are_enemies, cast_highlight_tex, &cosm, fog_of_war_character_id, make_drawing_input, &visible, &interp, real_global_time_seconds]() {
+		auto draw_lights_for = [&](const auto& drawing_in, const auto& handle) {
+			::specific_draw_neon_map(handle, drawing_in);
+			::draw_character_glow(
+				handle, 
+				{
+					drawing_in.drawer,
+					interp,
+					real_global_time_seconds,
+					cast_highlight_tex
+				}
+			);
+		};
+
+		const auto timestamp_ms = static_cast<unsigned>(real_global_time_seconds * 1000);
+
+		auto standard_border_provider = [timestamp_ms](const auto& typed_handle) {
+			return typed_handle.template get<components::sentience>().find_low_health_border(timestamp_ms);
+		};
+
+		auto occluded_highlight_provider = [](const auto& typed_handle) -> std::optional<rgba> {
+			switch (typed_handle.get_official_faction()) {
+				case faction_type::RESISTANCE:
+					return orange;
+				case faction_type::METROPOLIS:
+					return cyan;
+				case faction_type::ATLANTIS:
+					return green;
+
+				default:
+					return std::nullopt;
+			}
+		};
+
+		const auto friendly_drawing_in = make_drawing_input(D::FRIENDLY_SENTIENCES);
+		const auto enemy_drawing_in = make_drawing_input(D::ENEMY_SENTIENCES);
+
+		const auto borders_friendly_drawing_in = make_drawing_input(D::BORDERS_FRIENDLY_SENTIENCES);
+		const auto borders_enemy_drawing_in = make_drawing_input(D::BORDERS_ENEMY_SENTIENCES);
+
+		const auto occluded_enemy_highlights_in = make_drawing_input(D::OCCLUDED_ENEMY_HIGHLIGHTS);
+
+		const auto neons_friendly_drawing_in = make_drawing_input(D::NEONS_FRIENDLY_SENTIENCES);
+		const auto neons_enemy_drawing_in = make_drawing_input(D::NEONS_ENEMY_SENTIENCES);
+
+		/*
+			Drawn over the ground rather than into the environment shadow texture,
+			so that they stay visible under lights too.
+		*/
+
+		const auto shadows_friendly_drawing_in = make_drawing_input(D::FRIENDLY_SENTIENCE_SHADOWS);
+		const auto shadows_enemy_drawing_in = make_drawing_input(D::ENEMY_SENTIENCE_SHADOWS);
+
+		auto draw_shadow_for = [&](const auto& typed_handle, const auto& drawing_in) {
+			const bool standing_corpse = typed_handle.template get<components::sentience>().is_dead();
+			const auto offset = standing_corpse ? standing_corpse_shadow_offset : character_shadow_offset;
+
+			::specific_draw_color_highlight(typed_handle, CHARACTER_SHADOW_COLOR, drawing_in, ::make_shadow_offset_customizer(offset));
+		};
+
+		if (const auto fog_of_war_character = cosm[fog_of_war_character_id ? *fog_of_war_character_id : entity_id()]) {
+			const auto fow_faction = fog_of_war_character.get_official_faction();
+
+			visible.for_each<render_layer::SENTIENCES>(cosm, [&](const auto& handle) {
+				handle.template dispatch_on_having_all<components::sentience>([&](const auto& typed_handle) {
+					const bool is_local = typed_handle == fog_of_war_character;
+
+					if (const bool visible_in_fow = is_local || (!ffa && typed_handle.get_official_faction() == fow_faction) || see_enemies_behind_walls) {
+						draw_lights_for(neons_friendly_drawing_in, typed_handle);
+
+						draw_shadow_for(typed_handle, shadows_friendly_drawing_in);
+						::specific_draw_entity(typed_handle, friendly_drawing_in);
+						::specific_draw_border(typed_handle, borders_friendly_drawing_in, standard_border_provider);
+					}
+					else {
+						draw_lights_for(neons_enemy_drawing_in, typed_handle);
+
+						draw_shadow_for(typed_handle, shadows_enemy_drawing_in);
+						::specific_draw_entity(typed_handle, enemy_drawing_in);
+						::specific_draw_border(typed_handle, borders_enemy_drawing_in, standard_border_provider);
+
+						if (draw_enemy_silhouettes && typed_handle.template get<components::sentience>().is_conscious()) {
+							::specific_draw_border(typed_handle, occluded_enemy_highlights_in, occluded_highlight_provider);
+						}
+					}
+				});
+			});
+		}
+		else {
+			visible.for_each<render_layer::SENTIENCES>(cosm, [&](const auto& handle) {
+				handle.template dispatch_on_having_all<components::sentience>([&](const auto& typed_handle) {
+					draw_lights_for(neons_friendly_drawing_in, typed_handle);
+
+					::specific_draw_entity(typed_handle, friendly_drawing_in);
+					::specific_draw_border(typed_handle, borders_friendly_drawing_in, standard_border_provider);
+				});
+			});
+		}
+	};
+
+	auto special_effects_job = [&cosm, &exploding_rings, &dedicated, get_drawer_for, &thunders, queried_cone, actual_cone, get_line_drawer_for]() {
+		{
+			thunders.draw_thunders(
+				get_line_drawer_for(D::THUNDERS),
+				queried_cone
+			);
+		}
+
+		{
+			exploding_rings.draw_rings(
+				get_drawer_for(D::EXPLODING_RINGS),
+				dedicated[D::EXPLODING_RINGS].specials,
+				queried_cone,
+				actual_cone
+			);
+		}
+
+		{
+			exploding_rings.draw_continuous_rings(
+				cosm,
+				get_drawer_for(D::EXPLODING_RINGS),
+				dedicated[D::EXPLODING_RINGS].specials,
+				queried_cone,
+				actual_cone
+			);
+		}
+	};
+
+	auto minimap_job = [minimap_state = in.minimap_state, minimap_area_zoom = in.minimap_area_zoom, minimap_transform = in.minimap_transform, bomb_owner = in.indicator_meta.bomb_owner, settings, screen_size, &av, &interp, &dedicated, &necessarys, &special_indicators, viewed_character, real_global_time_seconds, pre_step_crosshair_displacement]() {
+		::draw_minimap({
+			settings.minimap,
+			settings.fog_of_war,
+			minimap_state,
+			minimap_area_zoom,
+			screen_size,
+			viewed_character,
+			interp,
+			av.template get<minimap_sighting_system>(),
+			real_global_time_seconds,
+			pre_step_crosshair_displacement,
+			necessarys.at(assets::necessary_image_id::BLANK),
+			special_indicators,
+			necessarys,
+			bomb_owner,
+			minimap_transform,
+			dedicated[D::MINIMAP].triangles,
+			dedicated[D::MINIMAP_DITHER].triangles,
+			dedicated[D::MINIMAP_FOREGROUND].triangles
+		});
+	};
+
+	enqueue_layer_jobs();
+
+	pool.enqueue(sentiences_job);
+
+	if (viewed_character) {
+		pool.enqueue(indicators_and_callouts_job);
+		pool.enqueue(sentience_hud_job);
+
+		if (settings.minimap.is_visible(in.minimap_state)) {
+			pool.enqueue(minimap_job);
+		}
+	}
+
+	pool.enqueue(explosives_hud_job);
+	pool.enqueue(special_effects_job);
+
+	if (environment_shadows) {
+		const auto shadow_tip_strength = 1.0f - in.get_environment_shadow_smoothness();
+
+		auto environment_shadows_job = [&cosm, &interp, &visible, queried_cone, &dedicated, &necessarys, shadow_tip_strength]() {
+			::draw_environment_shadows({
+				cosm,
+				interp,
+				visible,
+				::calc_sun_shadow_texture_layout(
+					queried_cone.get_visible_world_rect_aabb(),
+					queried_cone.eye.zoom,
+					cosm.get_common_significant().light.sun_shadows.step
+				).world_rect,
+				necessarys.at(assets::necessary_image_id::BLANK),
+				shadow_tip_strength,
+				dedicated[D::SHADOW_CASTS].triangles,
+				dedicated[D::SHADOW_FOOTPRINTS].triangles
+			});
+		};
+
+		pool.enqueue(environment_shadows_job);
+
+		/*
+			Sprites that cast silhouette shadows - foreground ones, or fish swimming above the aquarium floor -
+			throw them along the sun, like characters do,
+			but into the environment shadow texture.
+			Foreground shadows fall on everything, the ones of ground sprites only on the ground.
+		*/
+
+		const bool draw_foreground_shadows = in.perf_settings.sun_shadows.foreground;
+		const bool draw_background_shadows = in.perf_settings.sun_shadows.background;
+
+		auto foreground_shadows_job = [&cosm, &visible, make_drawing_input, draw_foreground_shadows, draw_background_shadows]() {
+			const auto drawing_in = make_drawing_input(D::SHADOW_SPRITES);
+			const auto sun_step = cosm.get_common_significant().light.sun_shadows.step;
+			visible.for_each<render_layer::GROUND, render_layer::FOREGROUND, render_layer::FOREGROUND_GLOWS>(cosm, [&](const auto& handle) {
+				handle.template dispatch_on_having_all<invariants::sprite, invariants::render>([&](const auto& typed_handle) {
+					const auto& render = typed_handle.template get<invariants::render>();
+
+					if (!render.casts_foreground_shadow) {
+						return;
+					}
+
+					/*
+						Foreground always hangs above characters, anything lower casts from its own height.
+					*/
+
+					const bool is_foreground = render.layer == render_layer::FOREGROUND || render.layer == render_layer::FOREGROUND_GLOWS;
+
+					if (!(is_foreground ? draw_foreground_shadows : draw_background_shadows)) {
+						return;
+					}
+
+					const auto height = 
+						is_foreground ?
+						::calc_foreground_shadow_height(render.foreground_shadow_extra_height) :
+						std::max(uint8_t(1), render.foreground_shadow_extra_height)
+					;
+					const auto offset = sun_step * static_cast<float>(height);
+
+					const auto shadow_color = rgba(
+						0,
+						0,
+						0,
+						::encode_silhouette_shadow_opacity(render.foreground_shadow_opacity, is_foreground)
+					);
+
+					::specific_entity_drawer(typed_handle, drawing_in, [&](auto renderable, const auto& manager, auto input) {
+						if (!is_foreground) {
+							::draw_ground_silhouette_shadow(renderable, manager, input, height, shadow_color, sun_step);
+							return;
+						}
+
+						renderable.effect = augs::sprite_special_effect::NONE;
+						renderable.set_color(shadow_color);
+						input.renderable_transform.pos += offset;
+
+						augs::draw(renderable, manager, input);
+					});
+				});
+			});
+		};
+
+		pool.enqueue(foreground_shadows_job);
+	}
+}
+

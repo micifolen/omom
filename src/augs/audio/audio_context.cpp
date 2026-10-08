@@ -1,0 +1,553 @@
+#include <cstddef>
+#include <cstdlib>
+#include <algorithm>
+#include <cctype>
+#include "audio_context.h"
+
+#include "augs/audio/OpenAL_error.h"
+
+#if BUILD_OPENAL
+#include <AL/al.h>
+#include <AL/alc.h>
+#if PLATFORM_WEB
+
+#define AL_SOURCE_DISTANCE_MODEL                 0x200
+
+#define ALC_HRTF_SOFT                            0x1992
+#define ALC_HRTF_STATUS_SOFT                     0x1993
+#define ALC_HRTF_DISABLED_SOFT                   0x0000
+#define ALC_HRTF_ENABLED_SOFT                    0x0001
+#define ALC_HRTF_DENIED_SOFT                     0x0002
+#define ALC_HRTF_REQUIRED_SOFT                   0x0003
+#define ALC_HRTF_HEADPHONES_DETECTED_SOFT        0x0004
+#define ALC_HRTF_UNSUPPORTED_FORMAT_SOFT         0x0005
+
+typedef ALCboolean (*ALC_RESET_DEVICE_SOFT)(ALCdevice *, const ALCint *attribs);
+
+ALC_RESET_DEVICE_SOFT alcResetDeviceSOFT;
+
+#else
+#include <AL/alext.h>
+#include <AL/efx.h>
+#endif
+#endif
+
+#include "augs/log.h"
+#include "augs/filesystem/file.h"
+#include "augs/filesystem/directory.h"
+#include "augs/audio/audio_settings.h"
+#include "augs/templates/corresponding_field.h"
+
+
+#if BUILD_OPENAL
+static std::string list_audio_devices(const ALCchar * const devices) {
+	const ALCchar *device = devices, *next = devices + 1;
+	size_t len = 0;
+
+	std::string devices_list;
+
+	devices_list += "Devices list:\n";
+
+	while (device && *device != '\0' && next && *next != '\0') {
+		devices_list += typesafe_sprintf("%x\n", device);
+		len = strlen(device);
+		device += (len + 1);
+		next += (len + 2);
+	}
+
+	return devices_list;
+}
+#endif
+
+namespace augs {
+	void log_all_audio_devices(const path_type& output_path) {
+#if BUILD_OPENAL
+		const auto all_audio_devices = list_audio_devices(alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER));
+
+		LOG(all_audio_devices);
+		LOG("Default device: %x", alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER));
+
+		augs::save_as_text(
+			output_path,
+			all_audio_devices
+		);
+#else
+		(void)output_path;
+#endif
+	}
+
+	hrtf_presets find_hrtf_presets(const audio_paths& paths) {
+		auto scan = [](const path_type& dir) {
+			auto filenames = std::vector<std::string>();
+			auto ec = std::error_code();
+
+			/* Incremented with an error code, as the range-for increment would throw. */
+			for (
+				auto it = std::filesystem::directory_iterator(dir, ec);
+				!ec && it != std::filesystem::directory_iterator();
+				it.increment(ec)
+			) {
+				const auto& entry = *it;
+				const auto& path = entry.path();
+				auto ext = path.extension().string();
+
+				std::transform(ext.begin(), ext.end(), ext.begin(), [](const unsigned char c) {
+					return static_cast<char>(std::tolower(c));
+				});
+
+				if (ext == ".mhr" && entry.is_regular_file(ec)) {
+					filenames.push_back(string_windows_friendly(path.filename()));
+				}
+			}
+
+			std::sort(filenames.begin(), filenames.end());
+
+			auto stems = std::vector<std::string>();
+
+			for (const auto& f : filenames) {
+				stems.push_back(f.substr(0, f.rfind('.')));
+			}
+
+			return stems;
+		};
+
+		return { scan(paths.official_hrtfs_dir), scan(paths.user_hrtfs_dir) };
+	}
+
+#if BUILD_OPENAL && !PLATFORM_WEB
+	/*
+		OpenAL reads environment variables with _wgetenv on Windows.
+		The narrow _putenv_s would pass a non-ASCII path through the ANSI code page.
+	*/
+
+	static void set_env_path(const char* const name, const path_type& value) {
+		const auto absolute = std::filesystem::absolute(value).lexically_normal();
+
+		if (const auto previous = std::getenv(name); previous != nullptr) {
+			LOG("Warning! Overriding %x=%x with %x.", name, previous, string_windows_friendly(absolute));
+		}
+
+#if PLATFORM_WINDOWS
+		const auto wide_name = std::filesystem::path(name).wstring();
+		_wputenv_s(wide_name.c_str(), absolute.wstring().c_str());
+#else
+		setenv(name, absolute.string().c_str(), 1);
+#endif
+	}
+
+	/*
+		OpenAL Soft reads its configuration once per process, on the first OpenAL call,
+		and ignores ALC_REFRESH - so the period size can only be set through a config file,
+		and only takes effect after a restart.
+
+		OpenAL names the HRTF data sets in the order it finds them:
+		the app-local path (ALSOFT_LOCAL_PATH, otherwise the CWD) first, then hrtf-paths.
+		So the official presets go to the local path and the user presets to hrtf-paths.
+		The trailing comma keeps the default search locations too, most importantly the built-in data set.
+	*/
+
+	static void write_openal_config(const audio_settings& settings, const audio_paths& paths) {
+		auto to_config_path = [](const path_type& p) {
+			const auto absolute = std::filesystem::absolute(p).lexically_normal();
+			const auto utf8 = string_windows_friendly(absolute);
+
+			if (utf8.find('#') != std::string::npos) {
+				LOG("Warning! '#' in %x starts a comment in alsoft.conf - HRTF presets from there won't be found.", utf8);
+			}
+
+			if (utf8.find(',') != std::string::npos) {
+				LOG("Warning! ',' in %x separates hrtf-paths in alsoft.conf - HRTF presets from there won't be found.", utf8);
+			}
+
+			/* '$' would start an environment variable expansion. */
+			auto escaped = std::string();
+
+			for (const auto c : utf8) {
+				escaped += c;
+
+				if (c == '$') {
+					escaped += '$';
+				}
+			}
+
+			return escaped;
+		};
+
+		set_env_path("ALSOFT_LOCAL_PATH", paths.official_hrtfs_dir);
+
+		const auto contents = typesafe_sprintf(
+			"# Generated by Hypersomnia from its audio settings. Overwritten on every launch.\n"
+			"period_size = %x\n"
+			"hrtf-paths = %x,\n",
+			settings.period_size,
+			to_config_path(paths.user_hrtfs_dir)
+		);
+
+		try {
+			augs::save_as_text(paths.generated_openal_config, contents);
+
+			LOG("Generated OpenAL config at %x:\n%x", string_windows_friendly(paths.generated_openal_config), contents);
+
+			set_env_path("ALSOFT_CONF", paths.generated_openal_config);
+		}
+		catch (const std::exception& e) {
+			LOG("Failed to write the OpenAL config: %x", e.what());
+		}
+	}
+#endif
+
+	audio_device::audio_device(const audio_settings& settings, const audio_paths& paths) : 
+		paths(paths),
+		period_size_at_launch(settings.period_size)
+	{
+		const auto& device_name = settings.output_device_name;
+
+#if BUILD_OPENAL
+#if !PLATFORM_WEB
+		write_openal_config(settings, paths);
+#endif
+
+		device = alcOpenDevice(device_name.size() > 0 ? device_name.c_str() : nullptr);
+		
+		AL_CHECK_DEVICE(device);
+
+		if (!alcIsExtensionPresent(device, "ALC_EXT_EFX")) {
+			LOG("Warning! ALC_EXT_EFX extension is not present.");
+		}
+
+		ALCint sample_rate = 0;
+		alcGetIntegerv(device, ALC_FREQUENCY, 1, &sample_rate);
+		LOG("Device sample rate: %x", sample_rate);
+#else
+		(void)device_name;
+		(void)settings;
+#endif
+	}
+
+	audio_device::~audio_device() {
+		destroy();
+	}
+
+	audio_device::audio_device(audio_device&& b) noexcept
+		: device(b.device),
+		paths(std::move(b.paths)),
+		period_size_at_launch(b.period_size_at_launch)
+	{
+		b.device = nullptr;
+	}
+
+	audio_device& audio_device::operator=(audio_device&& b) noexcept {
+		destroy();
+
+		device = b.device;
+		paths = std::move(b.paths);
+		period_size_at_launch = b.period_size_at_launch;
+
+		b.device = nullptr;
+		return *this;
+	}
+
+	void audio_device::destroy() {
+#if BUILD_OPENAL
+		if (device != nullptr) {
+			alcCloseDevice(device);
+			LOG("Destroyed OpenAL device: %x", device);
+			device = nullptr;
+		}
+#endif
+	}
+
+	void audio_device::log_hrtf_status() const {
+		const auto stat = get_hrtf_status();
+		LOG(stat.message);
+	}
+
+	std::string audio_device::get_output_mode() const {
+#if BUILD_OPENAL && !PLATFORM_WEB
+		ALint mode;
+		alcGetIntegerv(device, ALC_OUTPUT_MODE_SOFT, 1, &mode);
+
+		switch (mode) {
+			case ALC_ANY_SOFT: return "ALC_ANY_SOFT";
+			case ALC_STEREO_BASIC_SOFT: return "ALC_STEREO_BASIC_SOFT";
+			case ALC_STEREO_UHJ_SOFT: return "ALC_STEREO_UHJ_SOFT";
+			case ALC_STEREO_HRTF_SOFT: return "ALC_STEREO_HRTF_SOFT";
+			case ALC_SURROUND_5_1_SOFT: return "ALC_SURROUND_5_1_SOFT";
+			case ALC_SURROUND_6_1_SOFT: return "ALC_SURROUND_6_1_SOFT";
+			case ALC_SURROUND_7_1_SOFT: return "ALC_SURROUND_7_1_SOFT";
+			default: return "UNKNOWN";
+		}
+#else
+		return "UNKNOWN";
+#endif
+	}
+
+	audio_device::hrtf_stat audio_device::get_hrtf_status() const {
+#if BUILD_OPENAL
+		ALint hrtf_status;
+		alcGetIntegerv(device, ALC_HRTF_STATUS_SOFT, 1, &hrtf_status);
+		AL_CHECK_DEVICE(device);
+
+		std::string status;
+		bool succ = false;
+
+		switch (hrtf_status) {
+		case ALC_HRTF_DISABLED_SOFT: status = "ALC_HRTF_DISABLED_SOFT"; break;
+		case ALC_HRTF_ENABLED_SOFT: succ = true; status = "ALC_HRTF_ENABLED_SOFT"; break;
+		case ALC_HRTF_DENIED_SOFT: status = "ALC_HRTF_DENIED_SOFT"; break;
+		case ALC_HRTF_REQUIRED_SOFT: succ = true; status = "ALC_HRTF_REQUIRED_SOFT"; break;
+		case ALC_HRTF_HEADPHONES_DETECTED_SOFT: succ = true; status = "ALC_HRTF_HEADPHONES_DETECTED_SOFT"; break;
+		case ALC_HRTF_UNSUPPORTED_FORMAT_SOFT: status = "ALC_HRTF_UNSUPPORTED_FORMAT_SOFT"; break;
+		default: status = "Unknown"; break;
+		}
+
+		return { succ, status };
+#else
+		return { false, "ALC_HRTF_DISABLED_SOFT" };
+#endif
+	}
+
+	std::string audio_device::get_hrtf_name() const {
+#if BUILD_OPENAL && !PLATFORM_WEB
+		if (const auto name = alcGetString(device, ALC_HRTF_SPECIFIER_SOFT); name != nullptr) {
+			return name;
+		}
+#endif
+
+		return "";
+	}
+
+	std::optional<float> audio_device::get_latency_ms() const {
+#if BUILD_OPENAL && !PLATFORM_WEB
+		if (alcIsExtensionPresent(device, "ALC_SOFT_device_clock")) {
+			ALCint64SOFT latency_ns = 0;
+			alcGetInteger64vSOFT(device, ALC_DEVICE_LATENCY_SOFT, 1, &latency_ns);
+
+			return static_cast<float>(static_cast<double>(latency_ns) / 1'000'000.0);
+		}
+#endif
+
+		return std::nullopt;
+	}
+
+	int audio_device::find_hrtf_id(const audio_settings& settings) const {
+#if BUILD_OPENAL && !PLATFORM_WEB
+		static constexpr auto built_in_name = "Built-In HRTF";
+
+		/*
+			OpenAL names each data set after its file, enumerating the official folder
+			before the user folder, and appends " #2" to a name that is already taken.
+		*/
+
+		const auto wanted_name = [&]() -> std::string {
+			const auto& preset = settings.hrtf_preset;
+
+			if (preset.empty()) {
+				return built_in_name;
+			}
+
+			if (settings.hrtf_preset_is_user) {
+				const auto official = find_hrtf_presets(paths).official;
+
+				if (std::find(official.begin(), official.end(), preset) != official.end()) {
+					return preset + " #2";
+				}
+			}
+
+			return preset;
+		}();
+
+		/* Querying the count re-enumerates, so files added since the launch are found too. */
+		ALCint num_hrtfs = 0;
+		alcGetIntegerv(device, ALC_NUM_HRTF_SPECIFIERS_SOFT, 1, &num_hrtfs);
+
+		auto find_by_name = [&](const std::string& name) {
+			for (int i = 0; i < num_hrtfs; ++i) {
+				if (const auto candidate = alcGetStringiSOFT(device, ALC_HRTF_SPECIFIER_SOFT, i); candidate != nullptr) {
+					if (name == candidate) {
+						return i;
+					}
+				}
+			}
+
+			return -1;
+		};
+
+		if (const auto found = find_by_name(wanted_name); found != -1) {
+			return found;
+		}
+
+		LOG("HRTF preset \"%x\" not found. Falling back to %x.", wanted_name, built_in_name);
+		return find_by_name(built_in_name);
+#else
+		(void)settings;
+		return -1;
+#endif
+	}
+
+#if BUILD_OPENAL
+	static std::array<ALCint, 11> make_attrs(const audio_settings& settings, const int hrtf_id) {
+#if PLATFORM_WEB
+		(void)hrtf_id;
+
+		return {
+			ALC_HRTF_SOFT, settings.output_mode == audio_output_mode::STEREO_HRTF, /* request HRTF */
+			ALC_MONO_SOURCES, static_cast<ALCint>(settings.max_number_of_sound_sources),
+			0
+		};
+#else
+		auto output_mode_to_al_mode = [](const audio_output_mode mode) {
+			using O = audio_output_mode;
+			switch (mode) {
+				case O::AUTO: return ALC_ANY_SOFT;
+				case O::STEREO_BASIC: return ALC_STEREO_BASIC_SOFT;
+				case O::STEREO_UHJ: return ALC_STEREO_UHJ_SOFT;
+				case O::STEREO_HRTF: return ALC_STEREO_HRTF_SOFT;
+				case O::SURROUND_5_1: return ALC_SURROUND_5_1_SOFT;
+				case O::SURROUND_6_1: return ALC_SURROUND_6_1_SOFT;
+				case O::SURROUND_7_1: return ALC_SURROUND_7_1_SOFT;
+				default: return ALC_ANY_SOFT;
+			}
+		};
+
+		/* A negative id lets OpenAL pick - it tries the data sets in order. */
+
+		return {
+			ALC_MONO_SOURCES, static_cast<ALCint>(settings.max_number_of_sound_sources),
+			ALC_OUTPUT_MODE_SOFT, output_mode_to_al_mode(settings.output_mode),
+			ALC_OUTPUT_LIMITER_SOFT, AL_TRUE,
+			ALC_HRTF_ID_SOFT, hrtf_id,
+			0
+		};
+#endif
+	}
+#endif
+
+	void audio_device::reset_device(audio_settings settings) {
+#if BUILD_OPENAL
+		auto attrs = make_attrs(settings, find_hrtf_id(settings));
+
+		if ((bool)alcResetDeviceSOFT) {
+			alcResetDeviceSOFT(device, &attrs[0]);
+		}
+
+		AL_CHECK_DEVICE(device);
+		log_hrtf_status();
+#else
+		(void)settings;
+#endif
+	}
+
+	audio_context::audio_context(const audio_settings& settings, const audio_paths& paths) 
+		: device(settings, paths) 
+	{
+#if BUILD_OPENAL
+		auto attrs = make_attrs(settings, device.find_hrtf_id(settings));
+		context = alcCreateContext(device, &attrs[0]);
+
+		/* The context is already created with these, so apply must not reset the device again. */
+		current_settings = settings;
+
+		if (!context || !set_as_current()) {
+			if (context) {
+				AL_CHECK(alcDestroyContext(context));
+			}
+
+			throw audio_error(
+				"Failed to set an OpenAL context on device: %x", 
+				settings.output_device_name
+			);
+		}
+
+#if PLATFORM_WEB
+		alcResetDeviceSOFT = reinterpret_cast<ALC_RESET_DEVICE_SOFT>(alcGetProcAddress(device, "alcResetDeviceSOFT"));
+#endif
+
+		AL_CHECK(alEnable(AL_SOURCE_DISTANCE_MODEL));
+		LOG_NVPS(alIsEnabled(AL_SOURCE_DISTANCE_MODEL));
+
+		device.log_hrtf_status();
+
+		apply(settings, true);
+
+		{
+			ALint num_stereo_sources;
+			ALint num_mono_sources;
+
+			alcGetIntegerv(device, ALC_STEREO_SOURCES, 1, &num_stereo_sources);
+			alcGetIntegerv(device, ALC_MONO_SOURCES, 1, &num_mono_sources);
+
+			LOG_NVPS(num_stereo_sources, num_mono_sources);
+		}
+#endif
+	}
+
+	audio_context::~audio_context() {
+		destroy();
+	}
+
+	audio_context::audio_context(audio_context&& b) noexcept :
+		device(std::move(b.device)),
+		context(b.context)
+	{
+		b.context = nullptr;
+	}
+
+	audio_context& audio_context::operator=(audio_context&& b) noexcept {
+		destroy();
+
+		device = std::move(b.device);
+		context = b.context;
+
+		b.context = nullptr;
+
+		return *this;
+	}
+
+	void audio_context::destroy() {
+#if BUILD_OPENAL
+		if (context) {
+			alcMakeContextCurrent(nullptr);
+			alcDestroyContext(context);
+			LOG("Destroyed OpenAL context: %x", context);
+			context = nullptr;
+		}
+#endif
+	}
+
+	bool audio_context::set_as_current() {
+#if BUILD_OPENAL
+		auto result = alcMakeContextCurrent(context);
+		AL_CHECK(result);
+		return result == ALC_TRUE;
+#else
+		return true;
+#endif
+	}
+
+	void audio_context::speed_of_sound(const float meters_per_sec) {
+		(void)meters_per_sec;
+		AL_CHECK(alSpeedOfSound(meters_per_sec));
+	}
+
+	void audio_context::apply(const audio_settings& settings, const bool force) {
+		auto changed = [&](auto& field) {
+			return !(field == augs::get_corresponding_field(field, settings, current_settings));
+		};
+
+		if (// force // don't have to force it since we're setting it on alcCreateContext
+			changed(settings.output_mode)
+			|| changed(settings.max_number_of_sound_sources)
+			|| changed(settings.hrtf_preset)
+			|| changed(settings.hrtf_preset_is_user)
+		) {
+			device.reset_device(settings);
+		}
+
+		if (force || changed(settings.sound_meters_per_second)) {
+			speed_of_sound(settings.sound_meters_per_second);
+		}
+
+		current_settings = settings;
+	}
+}
